@@ -1,0 +1,12 @@
+*/__pycache__
+.DS_Store
+*.pdf
+*.aux
+*.log
+*.gz
+*.doc
+*.docx
+*.fls
+*.fdb_latexmk
+*.out
+*.ipynb_checkpoints*
