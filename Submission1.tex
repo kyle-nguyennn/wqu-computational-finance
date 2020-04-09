@@ -395,7 +395,7 @@
 % the following creates an abstract -- it can be omitted
 % an example of an environment: these have the form \begin{name} ... \end{name}
 \begin{abstract}
-In this report we discuss European up-and-out call option.  In the first section we introduce a European up-and-out call option, in the second section we simulate paths for the underlying share and for the counterparty's firm value using varying sample sizes , in the third section we Determine Monte Carlo estimates of both the default-free value of the option and the Credit Valuation Adjustment (CVA),  in the fourth section we calculate the Monte Carlo estimates for the price of the option incorporating counterparty risk, given by the default-free price less the CVA. We conclude the report by discussing ....................  
+This report presents the results of the simulation of a European up-and-out call option over twelve months.  The Black-Scholes-Merton model will be used to implement Monte Carlo estimations using Python code. The estimations will simulate paths for the underlying share and the counterparty's firm value using varying sample sizes, and determine estimates of both the default-free value of the option and the Credit Valuation Adjustment (CVA). Following from these it is simple to price the option incorporating counterparty risk, given by the default-free price less the CVA.
 \end{abstract}
 
 \section{Introduction
@@ -513,10 +513,42 @@ The simulated payoff paths over twelve months are plotted below, with an arbitra
 \end{figure}
 
 \subsection{Credit Valuation Adjustment Estimation}
+\begin{figure}
+    \centering
+    \caption{Simulated Payoff Paths over 12 Months}
+    \includegraphics{images/cva.png}
+\end{figure}
 
 
+\section{Incorporating Counterparty Risk}
 
-\section{Monte Carlo estimates for the price of the option incorporating counterparty risk, given by the default-free price less the CVA.}
+To estimate the price of the option incorporating counterparty risk, the CVA is subtracted from the default-free price; both of these have already been calculated at this point.
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{20}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n}{option\PYZus{}cva\PYZus{}adjusted\PYZus{}prices} \PY{o}{=} \PY{p}{[}\PY{p}{]}
+\PY{n}{option\PYZus{}cva\PYZus{}adjusted\PYZus{}std} \PY{o}{=} \PY{p}{[}\PY{p}{]}
+
+\PY{k}{for} \PY{n}{sample\PYZus{}size}\PY{p}{,} \PY{n}{paths} \PY{o+ow}{in} \PY{n}{share\PYZus{}price\PYZus{}paths}\PY{o}{.}\PY{n}{items}\PY{p}{(}\PY{p}{)}\PY{p}{:} 
+    \PY{n}{payoffs} \PY{o}{=} \PY{n}{payoff}\PY{p}{(}\PY{n}{paths}\PY{p}{,} \PY{n}{K}\PY{p}{,} \PY{n}{L}\PY{p}{)}
+    \PY{n}{option\PYZus{}price} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{exp}\PY{p}{(}\PY{o}{\PYZhy{}}\PY{n}{risk\PYZus{}free}\PY{o}{*}\PY{n}{T}\PY{p}{)}\PY{o}{*}\PY{n}{payoffs}
+
+    \PY{n}{term\PYZus{}firm\PYZus{}vals} \PY{o}{=} \PY{n}{firm\PYZus{}val\PYZus{}paths}\PY{p}{[}\PY{n}{sample\PYZus{}size}\PY{p}{]}\PY{o}{.}\PY{n}{iloc}\PY{p}{[}\PY{o}{\PYZhy{}}\PY{l+m+mi}{1}\PY{p}{]}\PY{o}{.}\PY{n}{to\PYZus{}numpy}\PY{p}{(}\PY{p}{)}
+    \PY{n}{amount\PYZus{}lost} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{exp}\PY{p}{(}\PY{o}{\PYZhy{}}\PY{n}{risk\PYZus{}free}\PY{o}{*}\PY{n}{T}\PY{p}{)}\PY{o}{*}\PY{p}{(}\PY{l+m+mi}{1}\PY{o}{\PYZhy{}}\PY{n}{recovery\PYZus{}rate}\PY{p}{)}\PY{o}{*}\PY{p}{(}\PY{n}{term\PYZus{}firm\PYZus{}vals} \PY{o}{\PYZlt{}} \PY{n}{debt}\PY{p}{)}\PY{o}{*}\PY{n}{payoffs}
+    
+    \PY{n}{option\PYZus{}cva\PYZus{}price} \PY{o}{=} \PY{n}{option\PYZus{}price} \PY{o}{\PYZhy{}} \PY{n}{amount\PYZus{}lost}
+    
+    \PY{n}{option\PYZus{}cva\PYZus{}adjusted\PYZus{}prices}\PY{o}{.}\PY{n}{append}\PY{p}{(}\PY{n}{option\PYZus{}cva\PYZus{}price}\PY{o}{.}\PY{n}{mean}\PY{p}{(}\PY{p}{)}\PY{p}{)}
+    \PY{n}{option\PYZus{}cva\PYZus{}adjusted\PYZus{}std}\PY{o}{.}\PY{n}{append}\PY{p}{(}\PY{n}{option\PYZus{}cva\PYZus{}price}\PY{o}{.}\PY{n}{std}\PY{p}{(}\PY{p}{)}\PY{o}{/}\PY{n}{np}\PY{o}{.}\PY{n}{sqrt}\PY{p}{(}\PY{n}{sample\PYZus{}size}\PY{p}{)}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+\begin{figure}
+    \centering
+    \caption{Simulated Payoff Paths over 12 Months}
+    \includegraphics{images/with-counterparty-risk.png}
+\end{figure}
 
     \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
 \prompt{In}{incolor}{1}{\boxspacing}
@@ -571,7 +603,7 @@ Cumulative Error :         0.12288
 % LaTeX assigns a number, unless you use \bibitem[Name]{refname} -- in this case
 % LaTeX prints Name when you use \cite{refname}
 \begin{thebibliography}{MMMMM} 
-\bibitem{BA1} Blanchard, Arnaud. "The two-factor Hull-White model: pricing and calibration of interest rates derivatives." KTH Royal Insitute of Technology (2014).
+\bibitem{BA1} Blanchard, Arnaud. "The two-factor Hull-White model: pricing and calibration of interest rates derivatives." KTH Royal Institute of Technology (2014).
 
 
 \end{thebibliography}
