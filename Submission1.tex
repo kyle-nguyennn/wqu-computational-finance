@@ -11,6 +11,10 @@
     	\usepackage{fontspec}
     \fi
 
+    \usepackage{graphicx} %package to manage images
+    \graphicspath{ {./images/} }
+    \usepackage{wrapfig}
+    
     % Basic figure setup, for now with no caption control since it's done
     % automatically by Pandoc (which extracts ![](path) syntax from Markdown).
     \usepackage{graphicx}
@@ -396,12 +400,121 @@ In this report we discuss European up-and-out call option.  In the first section
 
 \section{Introduction
 }
+The pricing calculations in this paper concern a European up-and-out call option. The up-and-out option is a type barrier option that is worthless if the barrier price is reached or exceeded, but otherwise behaves exactly as a standard European call option. There are four main variants of barrier options, two of which are cancelled by reaching the barrier price (up-and-out and down-and-out) and two of which are only valid if the barrier is reached (up-and-in and down-and-in).
+
+The standard European call option payoff formula can be applied with the addition of a check to determine if the barrier price was reached or exceeded, in which case the payoff is zero for the up-and-out option. The same approach could be applied with minor adjustments to price down-and-out, down-and-in or up-and-in barrier options.
+
+Possible paths for the up-and-out barrier option payoff would look similar to the chart below, where two of the paths have crossed the barrier and resulted in zero payoff, but the other three have not crossed the barrier and behave like a vanilla option.
+
+\begin{figure}
+    \centering
+    \caption{Simulated Payoffs for an Up-and-out Barrier Option}
+    \includegraphics{images/barrier-example.png}
+\end{figure}
+
+\section{Simulated Paths for the Underlying Share and Counterparty Firm
+}
+
+ In order to simulate paths for the underlying share and the firm, a matrix of correlated prices is generated based on the requirement for a correlation of 0.2. 
+ 
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{4}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{k}{def} \PY{n+nf}{share\PYZus{}path}\PY{p}{(}\PY{n}{S\PYZus{}0}\PY{p}{,} \PY{n}{risk\PYZus{}free\PYZus{}rate}\PY{p}{,} \PY{n}{sigma}\PY{p}{,} \PY{n}{Z}\PY{p}{,} \PY{n}{dT}\PY{p}{)}\PY{p}{:}
+    \PY{k}{return} \PY{n}{S\PYZus{}0}\PY{o}{*}\PY{n}{np}\PY{o}{.}\PY{n}{exp}\PY{p}{(}\PY{n}{np}\PY{o}{.}\PY{n}{cumsum}\PY{p}{(}\PY{p}{(}\PY{n}{risk\PYZus{}free\PYZus{}rate}\PY{o}{\PYZhy{}}\PY{n}{sigma}\PY{o}{*}\PY{o}{*}\PY{l+m+mi}{2}\PY{o}{/}\PY{l+m+mi}{2}\PY{p}{)}\PY{o}{*}\PY{n}{dT} \PY{o}{+} \PY{n}{sigma}\PY{o}{*}\PY{n}{np}\PY{o}{.}\PY{n}{sqrt}\PY{p}{(}\PY{n}{dT}\PY{p}{)}\PY{o}{*}\PY{n}{Z}\PY{p}{,}\PY{l+m+mi}{1}\PY{p}{)}\PY{p}{)}
 
 
-\section{Lifetime simulations of the option. 
+\PY{k}{def} \PY{n+nf}{generate\PYZus{}share\PYZus{}and\PYZus{}firm\PYZus{}price}\PY{p}{(}\PY{n}{S0}\PY{p}{,} \PY{n}{v\PYZus{}0}\PY{p}{,} \PY{n}{risk\PYZus{}free}\PY{p}{,} \PY{n}{sigma}\PY{p}{,} \PY{n}{sigma\PYZus{}firm}\PY{p}{,} \PY{n}{corr}\PY{p}{,} \PY{n}{T}\PY{p}{,} \PY{n}{sample\PYZus{}size} \PY{o}{=} \PY{l+m+mi}{10}\PY{p}{,} \PY{n}{timesteps} \PY{o}{=} \PY{l+m+mi}{12}\PY{p}{)}\PY{p}{:}
+    \PY{n}{corr\PYZus{}matrix} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{array}\PY{p}{(}\PY{p}{[}\PY{p}{[}\PY{l+m+mi}{1}\PY{p}{,} \PY{n}{corr}\PY{p}{]}\PY{p}{,} \PY{p}{[}\PY{n}{corr}\PY{p}{,} \PY{l+m+mi}{1}\PY{p}{]}\PY{p}{]}\PY{p}{)}
+    \PY{n}{norm\PYZus{}matrix} \PY{o}{=} \PY{n}{stats}\PY{o}{.}\PY{n}{norm}\PY{o}{.}\PY{n}{rvs}\PY{p}{(}\PY{n}{size} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{array}\PY{p}{(}\PY{p}{[}\PY{n}{sample\PYZus{}size}\PY{p}{,} \PY{l+m+mi}{2}\PY{p}{,} \PY{n}{timesteps}\PY{p}{]}\PY{p}{)}\PY{p}{)}
+    \PY{n}{corr\PYZus{}norm\PYZus{}matrix} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{matmul}\PY{p}{(}\PY{n}{np}\PY{o}{.}\PY{n}{linalg}\PY{o}{.}\PY{n}{cholesky}\PY{p}{(}\PY{n}{corr\PYZus{}matrix}\PY{p}{)}\PY{p}{,} \PY{n}{norm\PYZus{}matrix}\PY{p}{)}
+    
+    \PY{n}{share\PYZus{}price\PYZus{}path} \PY{o}{=} \PY{n}{pd}\PY{o}{.}\PY{n}{DataFrame}\PY{p}{(}\PY{n}{share\PYZus{}path}\PY{p}{(}\PY{n}{S0}\PY{p}{,} \PY{n}{risk\PYZus{}free}\PY{p}{,} \PY{n}{sigma}\PY{p}{,} \PY{n}{Z}\PY{o}{=}\PY{n}{corr\PYZus{}norm\PYZus{}matrix}\PY{p}{[}\PY{p}{:}\PY{p}{,}\PY{l+m+mi}{0}\PY{p}{,}\PY{p}{]}\PY{p}{,} \PY{n}{dT}\PY{o}{=}\PY{l+m+mi}{1}\PY{o}{/}\PY{n}{timesteps}\PY{p}{)}\PY{p}{)}
+    \PY{n}{share\PYZus{}price\PYZus{}path} \PY{o}{=} \PY{n}{share\PYZus{}price\PYZus{}path}\PY{o}{.}\PY{n}{transpose}\PY{p}{(}\PY{p}{)}
+
+    \PY{n}{firm\PYZus{}price\PYZus{}path} \PY{o}{=} \PY{n}{pd}\PY{o}{.}\PY{n}{DataFrame}\PY{p}{(}\PY{n}{share\PYZus{}path}\PY{p}{(}\PY{n}{v\PYZus{}0}\PY{p}{,} \PY{n}{risk\PYZus{}free}\PY{p}{,} \PY{n}{sigma\PYZus{}firm}\PY{p}{,} \PY{n}{Z}\PY{o}{=}\PY{n}{corr\PYZus{}norm\PYZus{}matrix}\PY{p}{[}\PY{p}{:}\PY{p}{,}\PY{l+m+mi}{1}\PY{p}{,}\PY{p}{]}\PY{p}{,} \PY{n}{dT}\PY{o}{=}\PY{l+m+mi}{1}\PY{o}{/}\PY{n}{timesteps}\PY{p}{)}\PY{p}{)}
+    \PY{n}{firm\PYZus{}price\PYZus{}path} \PY{o}{=} \PY{n}{firm\PYZus{}price\PYZus{}path}\PY{o}{.}\PY{n}{transpose}\PY{p}{(}\PY{p}{)}
+
+    \PY{k}{return} \PY{p}{[}\PY{n}{share\PYZus{}price\PYZus{}path}\PY{p}{,}\PY{n}{firm\PYZus{}price\PYZus{}path}\PY{p}{]}  
+\end{Verbatim}
+\end{tcolorbox}
+
+A Pearson test can be used to verify that the correlation is very close to the 0.2 target value. In Python this can be achieved as follows.
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{5}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{c+c1}{\PYZsh{}Testing share and firm price correlation}
+\PY{n}{sample\PYZus{}size} \PY{o}{=} \PY{l+m+mi}{20}
+\PY{n}{test} \PY{o}{=} \PY{n}{generate\PYZus{}share\PYZus{}and\PYZus{}firm\PYZus{}price}\PY{p}{(}\PY{n}{S0}\PY{p}{,} \PY{n}{v\PYZus{}0}\PY{p}{,} \PY{n}{risk\PYZus{}free}\PY{p}{,} \PY{n}{sigma}\PY{p}{,} \PY{n}{sigma\PYZus{}firm}\PY{p}{,} \PY{n}{corr}\PY{p}{,} \PY{n}{T}\PY{p}{,} \PY{n}{sample\PYZus{}size}\PY{p}{,} \PY{n}{timesteps} \PY{o}{=} \PY{l+m+mi}{20000}\PY{p}{)}
+
+\PY{n}{share\PYZus{}ret} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{log}\PY{p}{(}\PY{n}{test}\PY{p}{[}\PY{l+m+mi}{0}\PY{p}{]}\PY{p}{)}
+
+\PY{k}{for} \PY{n}{i} \PY{o+ow}{in} \PY{n+nb}{range}\PY{p}{(}\PY{n}{sample\PYZus{}size}\PY{p}{)}\PY{p}{:}
+    \PY{n}{test}\PY{p}{[}\PY{l+m+mi}{0}\PY{p}{]}\PY{p}{[}\PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{sharelog}\PY{l+s+s1}{\PYZsq{}}\PY{p}{]} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{log}\PY{p}{(}\PY{n}{test}\PY{p}{[}\PY{l+m+mi}{0}\PY{p}{]}\PY{p}{[}\PY{n}{i}\PY{p}{]}\PY{p}{)}
+    \PY{n}{test}\PY{p}{[}\PY{l+m+mi}{1}\PY{p}{]}\PY{p}{[}\PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{firmlog}\PY{l+s+s1}{\PYZsq{}}\PY{p}{]} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{log}\PY{p}{(}\PY{n}{test}\PY{p}{[}\PY{l+m+mi}{1}\PY{p}{]}\PY{p}{[}\PY{n}{i}\PY{p}{]}\PY{p}{)}
+    \PY{n+nb}{print}\PY{p}{(}\PY{n}{stats}\PY{o}{.}\PY{n}{pearsonr}\PY{p}{(}\PY{n}{test}\PY{p}{[}\PY{l+m+mi}{0}\PY{p}{]}\PY{p}{[}\PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{sharelog}\PY{l+s+s1}{\PYZsq{}}\PY{p}{]}\PY{o}{.}\PY{n}{diff}\PY{p}{(}\PY{p}{)}\PY{o}{.}\PY{n}{dropna}\PY{p}{(}\PY{p}{)}\PY{p}{,} \PY{n}{test}\PY{p}{[}\PY{l+m+mi}{1}\PY{p}{]}\PY{p}{[}\PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{firmlog}\PY{l+s+s1}{\PYZsq{}}\PY{p}{]}\PY{o}{.}\PY{n}{diff}\PY{p}{(}\PY{p}{)}\PY{o}{.}\PY{n}{dropna}\PY{p}{(}\PY{p}{)}\PY{p}{)}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{Verbatim}[commandchars=\\\{\}]
+(0.2035028479587627, 6.07336614624919e-186)
+(0.1986599648970965, 4.04999708397334e-177)
+(0.2016759847597355, 1.3775160789695309e-182)
+(0.20364055709605317, 3.381815103189066e-186)
+(0.19385401550478024, 1.3726860317349184e-168)
+(0.19892212605701942, 1.3666646645127986e-177)
+(0.18344242259502544, 7.064732561303709e-151)
+(0.20519864966486748, 4.356484560250648e-189)
+(0.193927020114363, 1.022531700201078e-168)
+(0.19751037260327703, 4.659785935918803e-175)
+(0.20393895669991588, 9.495454795149592e-187)
+(0.20458792743312265, 5.953557128978809e-188)
+(0.2042028358117276, 3.0829601588859696e-187)
+(0.19512700379639908, 7.943982338391081e-171)
+(0.19603082201925184, 2.003660281095667e-172)
+(0.19820752618175266, 2.630853001655849e-176)
+(0.20299979761482267, 5.137198920374959e-185)
+(0.1966663418793928, 1.4903037901828931e-173)
+(0.20319824398313788, 2.214204369119104e-185)
+(0.20765530182748704, 1.0810080941108714e-193)
+    \end{Verbatim}
+
+The payoff calculation for the up-and-out barrier option is defined as follows.
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{11}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{c+c1}{\PYZsh{} define payoff for up\PYZhy{}and\PYZhy{}out call option}
+\PY{k}{def} \PY{n+nf}{payoff}\PY{p}{(}\PY{n}{S\PYZus{}t}\PY{p}{,} \PY{n}{K}\PY{p}{,} \PY{n}{L}\PY{p}{)}\PY{p}{:}
+    \PY{n}{stopped\PYZus{}S} \PY{o}{=} \PY{n}{S\PYZus{}t}\PY{o}{.}\PY{n}{iloc}\PY{p}{[}\PY{o}{\PYZhy{}}\PY{l+m+mi}{1}\PY{p}{]}\PY{o}{.}\PY{n}{where}\PY{p}{(}\PY{p}{(}\PY{n}{S\PYZus{}t} \PY{o}{\PYZlt{}} \PY{n}{L}\PY{p}{)}\PY{o}{.}\PY{n}{all}\PY{p}{(}\PY{p}{)}\PY{p}{,} \PY{l+m+mi}{0}\PY{p}{)}
+    \PY{k}{return} \PY{n}{np}\PY{o}{.}\PY{n}{maximum}\PY{p}{(}\PY{n}{stopped\PYZus{}S} \PY{o}{\PYZhy{}} \PY{n}{K}\PY{p}{,} \PY{l+m+mi}{0}\PY{p}{)}\PY{o}{.}\PY{n}{to\PYZus{}numpy}\PY{p}{(}\PY{p}{)}
+
+\PY{n}{payoff}\PY{p}{(}\PY{n}{share\PYZus{}price\PYZus{}12\PYZus{}months}\PY{p}{,} \PY{n}{K}\PY{p}{,} \PY{n}{L}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+The simulated payoff paths over twelve months are plotted below, with an arbitrary starting value of 200 for the firm value.
+
+\begin{figure}
+    \centering
+    \caption{Simulated Payoff Paths over 12 Months}
+    \includegraphics{images/all-paths.png}
+\end{figure}
+
+\section{Monte Carlo Estimations
 }
-\section{Monte Carlo estimates of both the default-free value of the option and the Credit Valuation Adjustment (CVA).
-}
+
+\subsection{Default-Free Value Estimation}
+\begin{figure}
+    \centering
+    \caption{Simulated Payoff Paths over 12 Months}
+    \includegraphics{images/default-free.png}
+\end{figure}
+
+\subsection{Credit Valuation Adjustment Estimation}
+
+
 
 \section{Monte Carlo estimates for the price of the option incorporating counterparty risk, given by the default-free price less the CVA.}
 
