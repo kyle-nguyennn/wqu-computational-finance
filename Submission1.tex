@@ -396,6 +396,15 @@ In this report we discuss European up-and-out call option.  In the first section
 
 \section{Introduction
 }
+A European up-and-out call option is type of a Barrier Option, these options are consider path-dependant because barrier option's payoff is based on the underlying stock's price path.  The payoff of an up-and-out option at maturity $T$ is given by,
+
+\[
+Payoff_T= (S_T - K)^+ given, max_{t \in [0,T]} S_t < L
+\]
+Where, where $K$ is the strike of the option, $L$ is the barrier level, and $S_t$ is the share price at time $t$.  This is a type of call option whose payoff is reduced to 0 if the share price crosses the barrier level. \\
+
+The seminal work of Merton \cite{Merton1} pioneered the formula for pricing barrier options.  This led pricing formulas under the geometric Brownian motion (GBM) framework for one-asset barrier options by Rich \cite{RD1} and multi-asset barrier options by Wong and Kwok \cite{WK1}. Although the return dynamics of underlying shares are not sufficiently well described by the GBM process proposed by Black and Scholes \cite{BS1}, we are going to assume both the stock and counterparty firm values follow GBM  with constant drift and volatilities and default only occurs at maturity.
+
 
 
 \section{Lifetime simulations of the option. 
@@ -458,7 +467,11 @@ Cumulative Error :         0.12288
 % LaTeX assigns a number, unless you use \bibitem[Name]{refname} -- in this case
 % LaTeX prints Name when you use \cite{refname}
 \begin{thebibliography}{MMMMM} 
-\bibitem{BA1} Blanchard, Arnaud. "The two-factor Hull-White model: pricing and calibration of interest rates derivatives." KTH Royal Insitute of Technology (2014).
+\bibitem{Merton1} Merton, Robert C. "Theory of rational option pricing." The Bell Journal of economics and management science (1973): 141-183.
+\bibitem{RD1} Rich, Don R. "The mathematical foundations of barrier option-pricing theory." Advances in futures and options research 7 (1994).
+\bibitem{WK1} Wong, Hoi Ying, and Yue‐Kuen Kwok. "Multi-asset barrier options and occupation time derivatives." Applied Mathematical Finance 10.3 (2003): 245-266.
+\bibitem{BS1}Black, Fisher, and Myron Scholes. "The pricing and Corportate Liabilities." Journal of Political Economy 81 (1973).
+\bibitem{You1} Yousuf, M. "A fourth-order smoothing scheme for pricing barrier options under stochastic volatility." International Journal of Computer Mathematics 86.6 (2009): 1054-1067.
 
 
 \end{thebibliography}
