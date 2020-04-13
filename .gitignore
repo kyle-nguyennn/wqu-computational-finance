@@ -130,3 +130,11 @@ dmypy.json
 
 # data
 .DS_Store
+
+# tex 
+*.aux
+*.bbl
+*.blg
+*.log
+*.out
+*.gz
