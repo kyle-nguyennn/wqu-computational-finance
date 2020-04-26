@@ -1,0 +1,126 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usepackage{amssymb}
+\usepackage{csquotes}
+\usepackage[english]{babel}
+\usepackage[backend=biber]{biblatex}
+\addbibresource{main.bib}
+\setlength{\parindent}{0pt}
+\usepackage[Export]{adjustbox} % Used to constrain images to a maximum size
+\adjustboxset{max size={0.9\linewidth}{0.9\paperheight}}
+
+\title{Computational Finance Submission 2: \\A Vanilla European Call Option with Stochastic Volatility}
+\author{Joe Hoong Ng (ng\_joehoong@hotmail.com)
+\\Dang Duy Nghia Nguyen (nghia002@e.ntu.edu.sg)
+\\Dylan Thorne (dylan.thorne@gmail.com)
+\\Zain Us Sami Ahmed Ansari (zainussami@gmail.com)}
+
+\date{April 2020}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+    In this paper, we price a vanilla European call option under the Heston model and then simulate the monthly share price over a year using the Constant Elasticity of Variance (CEV) model, with the assumption of constant volatility each month. Monte Carlo simulations with varying sample sizes are run and the results are plotted against the closed form value for comparison.
+\end{abstract}
+
+\section{Part 1: Option Price Estimation}
+
+In the first submission, the parameters for the option were supplied as follows:
+\begin{itemize}
+    \item Option maturity is one year
+    \item The option is struck at-the-money
+    \item The up-and-out barrier for the option is \$150
+    \item The current share price is \$100
+    \item The risk-free continuously compounded interest rate is 8%
+    \item The volatility for the underlying share is 30%
+    \item The volatility for the counterparty’s firm value is 25%
+    \item The counterparty’s debt, due in one year, is \$175
+    \item The correlation between the counterparty and the stock is constant at 0.2
+    \item The recovery rate with the counterparty is 25%.
+\end{itemize}
+
+With the assumption that the underlying share follows the Heston model dynamics, the additional parameters required are specified as follows:
+\begin{itemize}
+    \item $\nu_0 = 0.06$
+    \item $\kappa = 9$
+    \item $\theta = 0.06$
+    \item $\rho = −0.4$
+\end{itemize}
+
+The characteristic function is implemented using a function presented by Albrecher et al \cite{hestontrap}. The function is written as:
+\[\phi_{S_T} = exp(C(\tau;u)+D(\tau;u)v_t + iu \log(S_t) )\]
+
+Where,
+
+\[C(\tau;u) = ri\tau u + \theta \kappa [\tau x\_ - \frac{1}{a}\log(\frac{1-ge^{d\tau}}{1-g})],\]
+
+\[D(\tau;u) = (\frac{1-e^{d\tau}}{1-ge^{d\tau}})x\_,\]
+
+\[\tau = T -t ,\]
+
+\[ g = \frac{x\_}{x_+},\]
+
+\[ x_\pm = \frac{b\pm d}{2a},\]
+
+\[ d = \sqrt{b^2 - 4ac},\]
+
+\[ c = - \frac{u^2 + Ui}{2},\]
+
+\[ b = \kappa - \rho \sigma iu,\]
+
+\[ a = \frac {\sigma^2}{2}\]
+
+This formula is implemented in Python code and the resulting estimate for the vanilla European call option price is approximately \$13.735.
+
+\section{Part 2: Underlying Share Price Path}
+
+The underlying share price is estimated across a range of 50 different samples sizes ranging from 1000 to 50000 samples. The implementation is done using the CEV model and a function that iterates through the months, using the previous month's share price as an input parameter. A flag was also added to allow comparison between simulations using the CEV and Black-Scholes (BS) models.
+
+\begin{center}
+\adjustimage{max size={0.9\linewidth}{0.9\paperheight}}{output_15_0.png}
+\end{center}
+
+\begin{center}
+\adjustimage{max size={0.9\linewidth}{0.9\paperheight}}{output_21_0.png}
+\end{center}
+
+The plot sample paths qualitatively validates that the algorithm is behaving as expected, diverging over time and grouping together with the majority of paths close to the mean value.
+
+\section{Part 3: Monte Carlo Share Price Estimation}
+
+The Monte Carlo price estimate for the vanilla call option was implemented in Python with a 50,000 sample size and resulted in an estimated price of \$8.740. 
+
+In comparison, the price calculated with the CEV model and non-central chi-squared distribution is \$8.702.
+
+Although this is a relatively small difference on 4c on the unit total price, it could account for a significant cost difference when scaled to a large number of units.
+
+\section{Part 4: Results}
+
+The results are clearly conveyed in plots comparing the Monte Carlo estimates with closed-form solutions.In each of the following plots, the margin of error has been plotted in red, using a margin of three standard deviations.
+
+\begin{center}
+\adjustimage{max size={0.9\linewidth}{0.9\paperheight}}{output_33_0.png}
+\end{center}
+
+\begin{center}
+\adjustimage{max size={0.9\linewidth}{0.9\paperheight}}{output_35_0.png}
+\end{center}
+
+It is evident that there is a discrepancy. Upon further investigation, for the Heston model, \[v_0 = 0.06\] but \[v_0 = (stock volatility)^{0.5}\] so \[stock volatility = .06^{0.5}= 0.2449\]
+Note that $\sigma$ under Heston model refers to volatility of stock volatility.
+
+Under our stock price Monte Carlo calculation, the default stock volatility is 0.0948 (given by  0.3*(100)*-.25 ). Thus its much less than Heston. To have the same initial stock volatility, we find a new value for $\sigma$ by equating \[\sigma(S_{ti})^{\gamma-1} = \sqrt{0.06}\] giving us \[\sigma = 0.775\] 
+
+We then find that our newly calculated Monte Carlo calculated call prices are aligned with the Fourier prices.
+
+\begin{center}
+\adjustimage{max size={0.9\linewidth}{0.9\paperheight}}{output_39_0.png}
+\end{center}
+
+\nocite{*}
+\printbibliography[title=References]
+
+\end{document}
