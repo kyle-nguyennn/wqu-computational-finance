@@ -400,14 +400,17 @@
 
 \section{Introduction
 }
+
+In this paper we go beyond the constant volatility assumption in the Black-Scholes model.  Most of code implemented in this submission id derived from Moldule 5 \cite{M5} of the course. 
+
 We initialize most variables as given by the question. 
 
 \begin{itemize}
     \item Option maturity is one year
     \item The option is struck at-the-money
     \item The current share price is \$100
-    \item The risk-free continuously compounded interest rate is 8%
-    \item The volatility for the underlying share is 30%
+    \item The risk-free continuously compounded interest rate is 8\%
+    \item The volatility for the underlying share is 30\%
 \end{itemize}
 
 \section{Fourier pricing technique under Heston model dynamics
@@ -541,11 +544,373 @@ will also price the call option under Black-Scholes assumption.
 
 \section{Simulate a share price path using CEV Model
 }
+Cox \cite{Cox1} developed the constant elasticity of variance (CEV) option pricing model, it attempts to capture stochastic volatility and is given by:
 
+\[dS_t =  \mu S_t dt + \sigma  S^\gamma _t dW_t\]
 
+If $\gamma = 1$ this model return the same value as Black-Scholes model, however if the value of $\gamma < 1 $ we experience an effect called leverage effect where the volatility increases as the price decreases over subsequent time periods.
+
+Based on the assumption that $\sigma(t_i,t_{i+1}) = \sigma(S_{ti})^{\gamma-1}$, where $\sigma = 0.3$ and $\gamma = 0.75$.  We can simulate the next step in a share price path using the following formula:
+$$S_{t_{i+1}} = S_{t_i}e^{(r - \frac{\sigma^2 (t_i,t_{i+1})}{2})(t_{i+1}-t_i)+\sigma(t_i, t_{i+1})\sqrt{t_{i+1}-t_i}Z}$$
+where $S_{ti}$ is the share price at time $t_i$, $\sigma(t_i, t_{i+1})$ is the volatility for the period $[t_i,t_{i+1}]$, r is the risk-free interest rate, and Z~N(0, 1)
+
+First, we define our helper functions. The next\_share\_price function
+is used to calculate the evolution of the share price at t+1, from the
+share price at t. We generate the random variable Z from within this
+function. The effective sigma is also written as a function of the share
+price at t.
+
+Just for exploration purposes, we also added a varying\_vol flag, to
+allow us to switch between a constant volatility and varying volatility.
+We use the initial stock price instead of the previous price when
+assuming a contant volatility.
+
+The other function is the generate\_share\_price\_path function. We
+first create an empty numpy array of shape (sample\_size x timesteps+1).
+Note the addition of one element to the timestep, as the first element
+is equal to the initial stock price. We then iterate through each path,
+and each timestep, applying the next\_share\_price function against the
+previous share price. We then convert the result into a pandas DataFrame
+and return the results.
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{7}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{k}{def} \PY{n+nf}{next\PYZus{}share\PYZus{}price}\PY{p}{(}\PY{n}{prev\PYZus{}price}\PY{p}{,} \PY{n}{r}\PY{p}{,} \PY{n}{dT}\PY{p}{,} \PY{n}{sigma\PYZus{}const}\PY{p}{,} \PY{n}{gamma}\PY{p}{,} \PY{n}{sample\PYZus{}size}\PY{p}{,} \PY{n}{varying\PYZus{}vol} \PY{o}{=} \PY{k+kc}{True}\PY{p}{)}\PY{p}{:}
+    \PY{n}{Z} \PY{o}{=} \PY{n}{stats}\PY{o}{.}\PY{n}{norm}\PY{o}{.}\PY{n}{rvs}\PY{p}{(}\PY{n}{size}\PY{o}{=}\PY{n}{sample\PYZus{}size}\PY{p}{)}
+    \PY{k}{if} \PY{n}{varying\PYZus{}vol}\PY{p}{:}
+        \PY{n}{sigma} \PY{o}{=} \PY{n}{sigma\PYZus{}const}\PY{o}{*}\PY{p}{(}\PY{n}{prev\PYZus{}price}\PY{p}{)}\PY{o}{*}\PY{o}{*}\PY{p}{(}\PY{n}{gamma}\PY{o}{\PYZhy{}}\PY{l+m+mi}{1}\PY{p}{)}
+    \PY{k}{else}\PY{p}{:}
+        \PY{n}{sigma} \PY{o}{=} \PY{n}{sigma\PYZus{}const}\PY{o}{*}\PY{p}{(}\PY{n}{S0}\PY{p}{)}\PY{o}{*}\PY{o}{*}\PY{p}{(}\PY{n}{gamma}\PY{o}{\PYZhy{}}\PY{l+m+mi}{1}\PY{p}{)}
+        
+    \PY{k}{return} \PY{n}{prev\PYZus{}price}\PY{o}{*}\PY{n}{np}\PY{o}{.}\PY{n}{exp}\PY{p}{(}\PY{p}{(}\PY{n}{r}\PY{o}{\PYZhy{}}\PY{p}{(}\PY{n}{sigma}\PY{o}{*}\PY{o}{*}\PY{l+m+mi}{2}\PY{p}{)}\PY{o}{/}\PY{l+m+mi}{2}\PY{p}{)}\PY{o}{*}\PY{p}{(}\PY{n}{dT}\PY{p}{)}\PY{o}{+}\PY{p}{(}\PY{n}{sigma}\PY{p}{)}\PY{o}{*}\PY{p}{(}\PY{n}{np}\PY{o}{.}\PY{n}{sqrt}\PY{p}{(}\PY{n}{dT}\PY{p}{)}\PY{p}{)}\PY{o}{*}\PY{n}{Z}\PY{p}{)}
+
+\PY{k}{def} \PY{n+nf}{generate\PYZus{}share\PYZus{}price\PYZus{}path}\PY{p}{(}\PY{n}{S0}\PY{p}{,} \PY{n}{r}\PY{p}{,} \PY{n}{T}\PY{p}{,} \PY{n}{sigma\PYZus{}const}\PY{p}{,} \PY{n}{gamma}\PY{p}{,} \PY{n}{sample\PYZus{}size}\PY{p}{,} \PY{n}{timesteps}\PY{p}{,} \PY{n}{varying\PYZus{}vol} \PY{o}{=} \PY{k+kc}{True}\PY{p}{)}\PY{p}{:}
+    \PY{n}{df} \PY{o}{=} \PY{n}{pd}\PY{o}{.}\PY{n}{DataFrame}\PY{p}{(}\PY{p}{[}\PY{n}{S0}\PY{p}{]}\PY{o}{*}\PY{n}{sample\PYZus{}size}\PY{p}{)}
+    \PY{k}{for} \PY{n}{t} \PY{o+ow}{in} \PY{n+nb}{range}\PY{p}{(}\PY{l+m+mi}{1}\PY{p}{,} \PY{n}{timesteps}\PY{o}{+}\PY{l+m+mi}{1}\PY{p}{)}\PY{p}{:}
+        \PY{n}{df}\PY{p}{[}\PY{n}{t}\PY{p}{]} \PY{o}{=} \PY{n}{next\PYZus{}share\PYZus{}price}\PY{p}{(}\PY{n}{df}\PY{p}{[}\PY{n}{t}\PY{o}{\PYZhy{}}\PY{l+m+mi}{1}\PY{p}{]}\PY{p}{,} \PY{n}{r}\PY{p}{,} \PY{l+m+mi}{1}\PY{o}{/}\PY{n}{timesteps}\PY{p}{,} \PY{n}{sigma\PYZus{}const}\PY{p}{,} \PY{n}{gamma}\PY{p}{,} \PY{n}{sample\PYZus{}size}\PY{p}{,} \PY{n}{varying\PYZus{}vol}\PY{p}{)}
+    \PY{k}{return} \PY{n}{df}\PY{o}{.}\PY{n}{T}
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{8}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{k+kn}{import} \PY{n+nn}{matplotlib}\PY{n+nn}{.}\PY{n+nn}{patches} \PY{k}{as} \PY{n+nn}{mpatches}
+\PY{n}{T} \PY{o}{=} \PY{l+m+mi}{10}
+\PY{n}{sample\PYZus{}size} \PY{o}{=} \PY{l+m+mi}{20}
+
+\PY{n}{share\PYZus{}price\PYZus{}path\PYZus{}cev} \PY{o}{=} \PY{n}{generate\PYZus{}share\PYZus{}price\PYZus{}path}\PY{p}{(}\PY{n}{S0}\PY{p}{,} \PY{n}{r}\PY{p}{,} \PY{n}{T}\PY{p}{,} \PY{n}{sigma\PYZus{}const}\PY{p}{,} \PY{n}{gamma}\PY{p}{,} \PY{n}{sample\PYZus{}size}\PY{p}{,} \PY{n}{timesteps}\PY{p}{)}
+\PY{n}{share\PYZus{}price\PYZus{}path\PYZus{}black\PYZus{}scholes} \PY{o}{=} \PY{n}{generate\PYZus{}share\PYZus{}price\PYZus{}path}\PY{p}{(}\PY{n}{S0}\PY{p}{,} \PY{n}{r}\PY{p}{,} \PY{n}{T}\PY{p}{,} \PY{n}{sigma\PYZus{}const}\PY{p}{,} \PY{l+m+mf}{1.0}\PY{p}{,} \PY{n}{sample\PYZus{}size}\PY{p}{,} \PY{n}{timesteps}\PY{p}{,} \PY{n}{varying\PYZus{}vol}\PY{o}{=}\PY{k+kc}{False}\PY{p}{)}
+
+\PY{n}{plt}\PY{o}{.}\PY{n}{plot}\PY{p}{(}\PY{n}{share\PYZus{}price\PYZus{}path\PYZus{}cev}\PY{p}{,} \PY{n}{color}\PY{o}{=}\PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{red}\PY{l+s+s1}{\PYZsq{}}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{plot}\PY{p}{(}\PY{n}{share\PYZus{}price\PYZus{}path\PYZus{}black\PYZus{}scholes}\PY{p}{,} \PY{n}{color}\PY{o}{=}\PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{blue}\PY{l+s+s1}{\PYZsq{}}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{xlabel}\PY{p}{(}\PY{l+s+s2}{\PYZdq{}}\PY{l+s+s2}{Timestep}\PY{l+s+s2}{\PYZdq{}}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{ylabel}\PY{p}{(}\PY{l+s+s2}{\PYZdq{}}\PY{l+s+s2}{Share price}\PY{l+s+s2}{\PYZdq{}}\PY{p}{)}
+\PY{n}{red\PYZus{}patch} \PY{o}{=} \PY{n}{mpatches}\PY{o}{.}\PY{n}{Patch}\PY{p}{(}\PY{n}{color}\PY{o}{=}\PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{red}\PY{l+s+s1}{\PYZsq{}}\PY{p}{,} \PY{n}{label}\PY{o}{=}\PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{CEV}\PY{l+s+s1}{\PYZsq{}}\PY{p}{)}
+\PY{n}{blue\PYZus{}patch} \PY{o}{=} \PY{n}{mpatches}\PY{o}{.}\PY{n}{Patch}\PY{p}{(}\PY{n}{color}\PY{o}{=}\PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{blue}\PY{l+s+s1}{\PYZsq{}}\PY{p}{,} \PY{n}{label}\PY{o}{=}\PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{BSM}\PY{l+s+s1}{\PYZsq{}}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{legend}\PY{p}{(}\PY{n}{handles}\PY{o}{=}\PY{p}{[}\PY{n}{red\PYZus{}patch}\PY{p}{,} \PY{n}{blue\PYZus{}patch}\PY{p}{]}\PY{p}{,} \PY{n}{loc}\PY{o}{=}\PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{upper left}\PY{l+s+s1}{\PYZsq{}}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{title}\PY{p}{(}\PY{l+s+s2}{\PYZdq{}}\PY{l+s+s2}{CEV vs BSM Stock Price Paths}\PY{l+s+s2}{\PYZdq{}}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{show}\PY{p}{(}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{center}
+    \adjustimage{max size={0.9\linewidth}{0.9\paperheight}}{output_17_0.png}
+    \end{center}
+    { \hspace*{\fill} \\}
+
+    Next, we create a python dictionary called share\_price\_paths, to hold
+our results for part 2. The key of this dictionary would be the number
+of sample price paths, while the values would be the dataframes
+containing the price paths. We also track the rough processing time
+required at each step, by printing the time when each iteration
+completes.
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{9}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{k+kn}{import} \PY{n+nn}{time}
+
+\PY{n}{T} \PY{o}{=} \PY{l+m+mi}{1}
+\PY{n}{sample\PYZus{}sizes} \PY{o}{=} \PY{n+nb}{range}\PY{p}{(}\PY{l+m+mi}{1000}\PY{p}{,} \PY{l+m+mi}{50001}\PY{p}{,} \PY{l+m+mi}{1000}\PY{p}{)}
+
+\PY{n}{share\PYZus{}price\PYZus{}paths} \PY{o}{=} \PY{p}{\PYZob{}}\PY{p}{\PYZcb{}}
+
+\PY{n+nb}{print}\PY{p}{(}\PY{l+s+s2}{\PYZdq{}}\PY{l+s+s2}{Start generating share price path}\PY{l+s+s2}{\PYZdq{}}\PY{p}{)}
+\PY{n}{start} \PY{o}{=} \PY{n}{time}\PY{o}{.}\PY{n}{time}\PY{p}{(}\PY{p}{)}
+\PY{k}{for} \PY{n}{sample\PYZus{}size} \PY{o+ow}{in} \PY{n}{sample\PYZus{}sizes}\PY{p}{:}
+    \PY{n}{share\PYZus{}val} \PY{o}{=} \PY{n}{generate\PYZus{}share\PYZus{}price\PYZus{}path}\PY{p}{(}\PY{n}{S0}\PY{p}{,} \PY{n}{r}\PY{p}{,} \PY{n}{T}\PY{p}{,} \PY{n}{sigma\PYZus{}const}\PY{p}{,} \PY{n}{gamma}\PY{p}{,} \PY{n}{sample\PYZus{}size}\PY{p}{,} \PY{n}{timesteps}\PY{p}{,} \PY{n}{varying\PYZus{}vol}\PY{o}{=}\PY{k+kc}{False}\PY{p}{)} 
+     
+    \PY{n}{share\PYZus{}price\PYZus{}paths}\PY{p}{[}\PY{n}{sample\PYZus{}size}\PY{p}{]} \PY{o}{=} \PY{n}{share\PYZus{}val}
+    \PY{c+c1}{\PYZsh{}print(\PYZdq{}Updated for sample size \PYZob{}\PYZcb{} at \PYZob{}\PYZcb{}\PYZdq{}.format(sample\PYZus{}size, datetime.datetime.now().strftime(\PYZsq{}\PYZpc{}H:\PYZpc{}M\PYZsq{})))}
+\PY{n}{end} \PY{o}{=} \PY{n}{time}\PY{o}{.}\PY{n}{time}\PY{p}{(}\PY{p}{)}
+\PY{n+nb}{print}\PY{p}{(}\PY{l+s+sa}{f}\PY{l+s+s2}{\PYZdq{}}\PY{l+s+s2}{Generating all samples paths takes }\PY{l+s+s2}{\PYZob{}}\PY{l+s+s2}{(end \PYZhy{} start):.2f\PYZcb{}s}\PY{l+s+s2}{\PYZdq{}}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{Verbatim}[commandchars=\\\{\}]
+Start generating share price path
+Generating all samples paths takes 2.58s
+    \end{Verbatim}
+
+    To display our output, we show the first 10 price paths generated by our
+iteration with 1000 samples:
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{10}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n}{share\PYZus{}price\PYZus{}paths}\PY{p}{[}\PY{l+m+mi}{1000}\PY{p}{]}\PY{o}{.}\PY{n}{iloc}\PY{p}{[}\PY{p}{:}\PY{p}{,} \PY{l+m+mi}{0}\PY{p}{:}\PY{l+m+mi}{10}\PY{p}{]}
+\end{Verbatim}
+\end{tcolorbox}
+
+            \begin{tcolorbox}[breakable, size=fbox, boxrule=.5pt, pad at break*=1mm, opacityfill=0]
+\prompt{Out}{outcolor}{10}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+             0           1           2           3           4           5  \textbackslash{}
+0   100.000000  100.000000  100.000000  100.000000  100.000000  100.000000
+1    99.626771   99.374526  100.689569   97.065445  106.862386   99.918343
+2   103.745565   96.967926  102.622183   96.451414  106.332275   96.640428
+3   107.154631   96.585243  105.974778   93.207852  100.177288   99.129417
+4   111.716818   95.838855  101.540594   94.146336   98.646601  102.592136
+5   120.620494   93.477848  100.930914   94.502805  100.662067  103.175996
+6   122.217586   87.674152  101.799340   91.076602  101.876289  102.336328
+7   123.138256   87.108925  103.904210   94.061221  106.060742  103.426255
+8   129.359695   87.871374  100.925245   92.948402  115.010833   98.206543
+9   123.575048   87.571414  105.883449   95.799071  117.769685   97.640631
+10  125.486476   88.836040  104.337774   96.829970  119.866089  100.623917
+11  124.538067   92.114326  106.173600   98.493852  118.497793   99.093147
+12  123.548415   92.619346  104.478810   98.081928  114.719969   94.669329
+
+             6           7           8           9
+0   100.000000  100.000000  100.000000  100.000000
+1   106.483031  100.796117  100.030802  102.593647
+2   105.512423  101.627748   98.448810  103.179244
+3   107.821291   98.518154   97.598741  103.563761
+4   108.394844   97.918995   99.489053  110.865271
+5   108.425203   99.326116   97.269739  108.916593
+6   107.844372  103.199284   98.432527  108.089622
+7   108.269775  100.286497  101.084604  107.860547
+8   108.268731   99.113198  101.552266  103.792957
+9   103.400905   98.076554  100.633537  106.623775
+10  107.548810   98.062335   97.583078  110.004438
+11  104.394412   98.481303   94.325492  107.980799
+12  103.306627   95.171645   94.012006  108.960908
+\end{Verbatim}
+\end{tcolorbox}
+        
+    Next, we plot the price paths for the iteration with 1000 samples,
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{11}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n}{plt}\PY{o}{.}\PY{n}{plot}\PY{p}{(}\PY{n}{share\PYZus{}price\PYZus{}paths}\PY{p}{[}\PY{l+m+mi}{1000}\PY{p}{]}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{xlabel}\PY{p}{(}\PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{Timestep}\PY{l+s+s1}{\PYZsq{}}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{ylabel}\PY{p}{(}\PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{Share price}\PY{l+s+s1}{\PYZsq{}}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{title}\PY{p}{(}\PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{Sample of 1000 Share Price Paths}\PY{l+s+s1}{\PYZsq{}}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{show}\PY{p}{(}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{center}
+    \adjustimage{max size={0.9\linewidth}{0.9\paperheight}}{output_23_0.png}
+    \end{center}
+    { \hspace*{\fill} \\}
 
 \section{Monte Carlo estimates}
 
+    Using Monte Carlo, we calculate the price of the vanilla call option as
+follows:
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{12}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n}{price\PYZus{}estimate} \PY{o}{=} \PY{p}{[}\PY{p}{]}
+\PY{n}{price\PYZus{}std} \PY{o}{=} \PY{p}{[}\PY{p}{]}
+
+
+\PY{k}{for} \PY{n}{size} \PY{o+ow}{in} \PY{n}{sample\PYZus{}sizes}\PY{p}{:}
+    \PY{n}{S\PYZus{}Ts} \PY{o}{=} \PY{n}{share\PYZus{}price\PYZus{}paths}\PY{p}{[}\PY{n}{size}\PY{p}{]}\PY{o}{.}\PY{n}{iloc}\PY{p}{[}\PY{l+m+mi}{12}\PY{p}{,} \PY{p}{:}\PY{p}{]}
+    \PY{n}{payoff} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{maximum}\PY{p}{(}\PY{n}{S\PYZus{}Ts} \PY{o}{\PYZhy{}} \PY{n}{K}\PY{p}{,} \PY{l+m+mi}{0}\PY{p}{)}
+    \PY{n}{discounted\PYZus{}price} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{exp}\PY{p}{(}\PY{o}{\PYZhy{}}\PY{n}{r}\PY{o}{*}\PY{n}{T}\PY{p}{)}\PY{o}{*}\PY{n}{payoff}
+    \PY{n}{price\PYZus{}estimate}\PY{o}{.}\PY{n}{append}\PY{p}{(}\PY{n}{discounted\PYZus{}price}\PY{o}{.}\PY{n}{mean}\PY{p}{(}\PY{p}{)}\PY{p}{)}
+    \PY{n}{price\PYZus{}std}\PY{o}{.}\PY{n}{append}\PY{p}{(}\PY{n}{discounted\PYZus{}price}\PY{o}{.}\PY{n}{std}\PY{p}{(}\PY{p}{)}\PY{o}{/}\PY{n}{np}\PY{o}{.}\PY{n}{sqrt}\PY{p}{(}\PY{n}{size}\PY{p}{)}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{13}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n+nb}{print}\PY{p}{(}\PY{l+s+s2}{\PYZdq{}}\PY{l+s+s2}{The price estimated by Monte Carlo when using sample size of 50,000 is : }\PY{l+s+si}{\PYZob{}:.3f\PYZcb{}}\PY{l+s+s2}{\PYZdq{}}\PY{o}{.}\PY{n}{format}\PY{p}{(}\PY{n}{price\PYZus{}estimate}\PY{p}{[}\PY{o}{\PYZhy{}}\PY{l+m+mi}{1}\PY{p}{]}\PY{p}{)}\PY{p}{)} 
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{Verbatim}[commandchars=\\\{\}]
+The price estimated by Monte Carlo when using sample size of 50,000 is : 8.694
+    \end{Verbatim}
+
+We then compare with calculation of CEV model using noncentralchi-squared
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{14}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{k+kn}{import} \PY{n+nn}{numpy} \PY{k}{as} \PY{n+nn}{np}
+\PY{k+kn}{import} \PY{n+nn}{matplotlib}\PY{n+nn}{.}\PY{n+nn}{pyplot} \PY{k}{as} \PY{n+nn}{plt}
+\PY{k+kn}{from} \PY{n+nn}{scipy}\PY{n+nn}{.}\PY{n+nn}{stats} \PY{k+kn}{import} \PY{n}{ncx2}
+
+\PY{n}{S0} \PY{o}{=} \PY{l+m+mi}{100}
+\PY{n}{sigma} \PY{o}{=} \PY{l+m+mf}{0.3}
+\PY{n}{gamma} \PY{o}{=} \PY{l+m+mf}{0.75}
+\PY{n}{r} \PY{o}{=} \PY{l+m+mf}{0.08}
+\PY{n}{T} \PY{o}{=} \PY{l+m+mi}{1}
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{15}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n}{z} \PY{o}{=} \PY{l+m+mi}{2} \PY{o}{+} \PY{l+m+mi}{1}\PY{o}{/}\PY{p}{(}\PY{l+m+mi}{1}\PY{o}{\PYZhy{}}\PY{n}{gamma}\PY{p}{)}
+\PY{k}{def} \PY{n+nf}{C}\PY{p}{(}\PY{n}{t}\PY{p}{,}\PY{n}{K}\PY{p}{)}\PY{p}{:}
+    \PY{n}{kappa} \PY{o}{=} \PY{l+m+mi}{2}\PY{o}{*}\PY{n}{r}\PY{o}{/}\PY{p}{(}\PY{n}{sigma}\PY{o}{*}\PY{o}{*}\PY{l+m+mi}{2}\PY{o}{*}\PY{p}{(}\PY{l+m+mi}{1}\PY{o}{\PYZhy{}}\PY{n}{gamma}\PY{p}{)}\PY{o}{*}\PY{p}{(}\PY{n}{np}\PY{o}{.}\PY{n}{exp}\PY{p}{(}\PY{l+m+mi}{2}\PY{o}{*}\PY{n}{r}\PY{o}{*}\PY{p}{(}\PY{l+m+mi}{1}\PY{o}{\PYZhy{}}\PY{n}{gamma}\PY{p}{)}\PY{o}{*}\PY{n}{t}\PY{p}{)}\PY{o}{\PYZhy{}}\PY{l+m+mi}{1}\PY{p}{)}\PY{p}{)}
+    \PY{n}{x} \PY{o}{=} \PY{n}{kappa}\PY{o}{*}\PY{n}{S0}\PY{o}{*}\PY{o}{*}\PY{p}{(}\PY{l+m+mi}{2}\PY{o}{*}\PY{p}{(}\PY{l+m+mi}{1}\PY{o}{\PYZhy{}}\PY{n}{gamma}\PY{p}{)}\PY{p}{)}\PY{o}{*}\PY{n}{np}\PY{o}{.}\PY{n}{exp}\PY{p}{(}\PY{l+m+mi}{2}\PY{o}{*}\PY{n}{r}\PY{o}{*}\PY{p}{(}\PY{l+m+mi}{1}\PY{o}{\PYZhy{}}\PY{n}{gamma}\PY{p}{)}\PY{o}{*}\PY{n}{t}\PY{p}{)}
+    \PY{n}{y} \PY{o}{=} \PY{n}{kappa}\PY{o}{*}\PY{n}{K}\PY{o}{*}\PY{o}{*}\PY{p}{(}\PY{l+m+mi}{2}\PY{o}{*}\PY{p}{(}\PY{l+m+mi}{1}\PY{o}{\PYZhy{}}\PY{n}{gamma}\PY{p}{)}\PY{p}{)}
+    \PY{k}{return} \PY{n}{S0}\PY{o}{*}\PY{p}{(}\PY{l+m+mi}{1}\PY{o}{\PYZhy{}}\PY{n}{ncx2}\PY{o}{.}\PY{n}{cdf}\PY{p}{(}\PY{n}{y}\PY{p}{,}\PY{n}{z}\PY{p}{,}\PY{n}{x}\PY{p}{)}\PY{p}{)}\PY{o}{\PYZhy{}}\PY{n}{K}\PY{o}{*}\PY{n}{np}\PY{o}{.}\PY{n}{exp}\PY{p}{(}\PY{o}{\PYZhy{}}\PY{n}{r}\PY{o}{*}\PY{n}{t}\PY{p}{)}\PY{o}{*}\PY{n}{ncx2}\PY{o}{.}\PY{n}{cdf}\PY{p}{(}\PY{n}{x}\PY{p}{,}\PY{n}{z}\PY{o}{\PYZhy{}}\PY{l+m+mi}{2}\PY{p}{,}\PY{n}{y}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{16}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n}{cev\PYZus{}call\PYZus{}price} \PY{o}{=} \PY{n}{C}\PY{p}{(}\PY{n}{T}\PY{p}{,} \PY{l+m+mi}{100}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{17}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n+nb}{print}\PY{p}{(}\PY{l+s+s2}{\PYZdq{}}\PY{l+s+s2}{The price calculated via CEV model using noncentral chi\PYZhy{}squared distribution is : }\PY{l+s+si}{\PYZob{}:.3f\PYZcb{}}\PY{l+s+s2}{\PYZdq{}}\PY{o}{.}\PY{n}{format}\PY{p}{(}\PY{n}{cev\PYZus{}call\PYZus{}price}\PY{p}{)}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{Verbatim}[commandchars=\\\{\}]
+The price calculated via CEV model using noncentral chi-squared distribution is
+: 8.702
+    \end{Verbatim}
+    
+    We plot the prices of our Monte Carlo estimates against the CEV
+noncentral chi-squared distribution prices calculated from Part 1 above:
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{18}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n}{plt}\PY{o}{.}\PY{n}{plot}\PY{p}{(}\PY{p}{[}\PY{n}{cev\PYZus{}call\PYZus{}price}\PY{p}{]}\PY{o}{*}\PY{l+m+mi}{50}\PY{p}{,} \PY{n}{label}\PY{o}{=}\PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{CEV Call Price}\PY{l+s+s1}{\PYZsq{}}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{plot}\PY{p}{(}\PY{n}{price\PYZus{}estimate}\PY{p}{,} \PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{.}\PY{l+s+s1}{\PYZsq{}}\PY{p}{,} \PY{n}{label}\PY{o}{=}\PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{Monte Carlo Estimates}\PY{l+s+s1}{\PYZsq{}}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{plot}\PY{p}{(}\PY{n}{price\PYZus{}estimate} \PY{o}{+} \PY{l+m+mi}{3}\PY{o}{*}\PY{n}{np}\PY{o}{.}\PY{n}{array}\PY{p}{(}\PY{n}{price\PYZus{}std}\PY{p}{)}\PY{p}{,} \PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{r}\PY{l+s+s1}{\PYZsq{}}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{plot}\PY{p}{(}\PY{n}{price\PYZus{}estimate} \PY{o}{\PYZhy{}} \PY{l+m+mi}{3}\PY{o}{*}\PY{n}{np}\PY{o}{.}\PY{n}{array}\PY{p}{(}\PY{n}{price\PYZus{}std}\PY{p}{)}\PY{p}{,} \PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{r}\PY{l+s+s1}{\PYZsq{}}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{legend}\PY{p}{(}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{show}\PY{p}{(}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{center}
+    \adjustimage{max size={0.9\linewidth}{0.9\paperheight}}{output_35_0.png}
+    \end{center}
+    { \hspace*{\fill} \\}
+    
+    We also plot the prices of our Monte Carlo estimates against the Fourier
+Call prices calculated from Part 1 above:
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{19}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n}{plt}\PY{o}{.}\PY{n}{plot}\PY{p}{(}\PY{p}{[}\PY{n}{fourier\PYZus{}call\PYZus{}val}\PY{p}{]}\PY{o}{*}\PY{l+m+mi}{50}\PY{p}{,} \PY{n}{label}\PY{o}{=}\PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{Fourier Call Price}\PY{l+s+s1}{\PYZsq{}}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{plot}\PY{p}{(}\PY{n}{price\PYZus{}estimate}\PY{p}{,} \PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{.}\PY{l+s+s1}{\PYZsq{}}\PY{p}{,} \PY{n}{label}\PY{o}{=}\PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{Monte Carlo Estimates}\PY{l+s+s1}{\PYZsq{}}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{plot}\PY{p}{(}\PY{n}{price\PYZus{}estimate} \PY{o}{+} \PY{l+m+mi}{3}\PY{o}{*}\PY{n}{np}\PY{o}{.}\PY{n}{array}\PY{p}{(}\PY{n}{price\PYZus{}std}\PY{p}{)}\PY{p}{,} \PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{r}\PY{l+s+s1}{\PYZsq{}}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{plot}\PY{p}{(}\PY{n}{price\PYZus{}estimate} \PY{o}{\PYZhy{}} \PY{l+m+mi}{3}\PY{o}{*}\PY{n}{np}\PY{o}{.}\PY{n}{array}\PY{p}{(}\PY{n}{price\PYZus{}std}\PY{p}{)}\PY{p}{,} \PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{r}\PY{l+s+s1}{\PYZsq{}}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{legend}\PY{p}{(}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{show}\PY{p}{(}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{center}
+    \adjustimage{max size={0.9\linewidth}{0.9\paperheight}}{output_37_0.png}
+    \end{center}
+    { \hspace*{\fill} \\}
+    
+    We notice that there is a discrepency. Upon further investigation, for
+the Heston model, v\_0 = 0.06 (v\_0 = stock volatility \^{} 0.5), so
+stock volatility = .06**0.5= 0.2449. Note that sigma under Heston model
+refers to volatility of stock volatility
+
+Under our stock price Monte Carlo calculation, the default stock
+volatility is 0.0948 (given by 0.3\emph{(100)}-.25 ). Thus its much less
+than Heston. To have the same initial stock volatility, we find a new
+value for \(\sigma\) by equating
+\(\sigma(S_{ti})^{\gamma-1} = \sqrt{0.06}\), giving us
+\(\sigma = 0.775\).
+
+We then find that our newly calculated Monte Carlo calculated call
+prices are aligned with the Fourier prices.
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{20}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n}{sigma\PYZus{}const} \PY{o}{=} \PY{l+m+mf}{0.775}
+
+\PY{n}{T} \PY{o}{=} \PY{l+m+mi}{1}
+\PY{n}{sample\PYZus{}sizes} \PY{o}{=} \PY{n+nb}{range}\PY{p}{(}\PY{l+m+mi}{1000}\PY{p}{,} \PY{l+m+mi}{50001}\PY{p}{,} \PY{l+m+mi}{1000}\PY{p}{)}
+
+\PY{n}{share\PYZus{}price\PYZus{}paths} \PY{o}{=} \PY{p}{\PYZob{}}\PY{p}{\PYZcb{}}
+
+\PY{n+nb}{print}\PY{p}{(}\PY{l+s+s2}{\PYZdq{}}\PY{l+s+s2}{Start generating share price path}\PY{l+s+s2}{\PYZdq{}}\PY{p}{)}
+\PY{n}{start} \PY{o}{=} \PY{n}{time}\PY{o}{.}\PY{n}{time}\PY{p}{(}\PY{p}{)}
+\PY{k}{for} \PY{n}{sample\PYZus{}size} \PY{o+ow}{in} \PY{n}{sample\PYZus{}sizes}\PY{p}{:}
+    \PY{n}{share\PYZus{}val} \PY{o}{=} \PY{n}{generate\PYZus{}share\PYZus{}price\PYZus{}path}\PY{p}{(}\PY{n}{S0}\PY{p}{,} \PY{n}{r}\PY{p}{,} \PY{n}{T}\PY{p}{,} \PY{n}{sigma\PYZus{}const}\PY{p}{,} \PY{n}{gamma}\PY{p}{,} \PY{n}{sample\PYZus{}size}\PY{p}{,} \PY{n}{timesteps}\PY{p}{,} \PY{n}{varying\PYZus{}vol}\PY{o}{=}\PY{k+kc}{False}\PY{p}{)} 
+     
+    \PY{n}{share\PYZus{}price\PYZus{}paths}\PY{p}{[}\PY{n}{sample\PYZus{}size}\PY{p}{]} \PY{o}{=} \PY{n}{share\PYZus{}val}
+    \PY{c+c1}{\PYZsh{}print(\PYZdq{}Updated for sample size \PYZob{}\PYZcb{} at \PYZob{}\PYZcb{}\PYZdq{}.format(sample\PYZus{}size, datetime.datetime.now().strftime(\PYZsq{}\PYZpc{}H:\PYZpc{}M\PYZsq{})))}
+\PY{n}{end} \PY{o}{=} \PY{n}{time}\PY{o}{.}\PY{n}{time}\PY{p}{(}\PY{p}{)}
+\PY{n+nb}{print}\PY{p}{(}\PY{l+s+sa}{f}\PY{l+s+s2}{\PYZdq{}}\PY{l+s+s2}{Generating all samples paths takes }\PY{l+s+s2}{\PYZob{}}\PY{l+s+s2}{(end \PYZhy{} start):.2f\PYZcb{}s}\PY{l+s+s2}{\PYZdq{}}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{Verbatim}[commandchars=\\\{\}]
+Start generating share price path
+Generating all samples paths takes 2.10s
+    \end{Verbatim}
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{21}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n}{price\PYZus{}estimate} \PY{o}{=} \PY{p}{[}\PY{p}{]}
+\PY{n}{price\PYZus{}std} \PY{o}{=} \PY{p}{[}\PY{p}{]}
+
+
+\PY{k}{for} \PY{n}{size} \PY{o+ow}{in} \PY{n}{sample\PYZus{}sizes}\PY{p}{:}
+    \PY{n}{S\PYZus{}Ts} \PY{o}{=} \PY{n}{share\PYZus{}price\PYZus{}paths}\PY{p}{[}\PY{n}{size}\PY{p}{]}\PY{o}{.}\PY{n}{iloc}\PY{p}{[}\PY{l+m+mi}{12}\PY{p}{,} \PY{p}{:}\PY{p}{]}
+    \PY{n}{payoff} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{maximum}\PY{p}{(}\PY{n}{S\PYZus{}Ts} \PY{o}{\PYZhy{}} \PY{n}{K}\PY{p}{,} \PY{l+m+mi}{0}\PY{p}{)}
+    \PY{n}{discounted\PYZus{}price} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{exp}\PY{p}{(}\PY{o}{\PYZhy{}}\PY{n}{r}\PY{o}{*}\PY{n}{T}\PY{p}{)}\PY{o}{*}\PY{n}{payoff}
+    \PY{n}{price\PYZus{}estimate}\PY{o}{.}\PY{n}{append}\PY{p}{(}\PY{n}{discounted\PYZus{}price}\PY{o}{.}\PY{n}{mean}\PY{p}{(}\PY{p}{)}\PY{p}{)}
+    \PY{n}{price\PYZus{}std}\PY{o}{.}\PY{n}{append}\PY{p}{(}\PY{n}{discounted\PYZus{}price}\PY{o}{.}\PY{n}{std}\PY{p}{(}\PY{p}{)}\PY{o}{/}\PY{n}{np}\PY{o}{.}\PY{n}{sqrt}\PY{p}{(}\PY{n}{size}\PY{p}{)}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{22}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n}{plt}\PY{o}{.}\PY{n}{plot}\PY{p}{(}\PY{p}{[}\PY{n}{fourier\PYZus{}call\PYZus{}val}\PY{p}{]}\PY{o}{*}\PY{l+m+mi}{50}\PY{p}{,} \PY{n}{label}\PY{o}{=}\PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{Fourier Call Price}\PY{l+s+s1}{\PYZsq{}}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{plot}\PY{p}{(}\PY{n}{price\PYZus{}estimate}\PY{p}{,} \PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{.}\PY{l+s+s1}{\PYZsq{}}\PY{p}{,} \PY{n}{label}\PY{o}{=}\PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{Monte Carlo Estimates}\PY{l+s+s1}{\PYZsq{}}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{plot}\PY{p}{(}\PY{n}{price\PYZus{}estimate} \PY{o}{+} \PY{l+m+mi}{3}\PY{o}{*}\PY{n}{np}\PY{o}{.}\PY{n}{array}\PY{p}{(}\PY{n}{price\PYZus{}std}\PY{p}{)}\PY{p}{,} \PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{r}\PY{l+s+s1}{\PYZsq{}}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{plot}\PY{p}{(}\PY{n}{price\PYZus{}estimate} \PY{o}{\PYZhy{}} \PY{l+m+mi}{3}\PY{o}{*}\PY{n}{np}\PY{o}{.}\PY{n}{array}\PY{p}{(}\PY{n}{price\PYZus{}std}\PY{p}{)}\PY{p}{,} \PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{r}\PY{l+s+s1}{\PYZsq{}}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{legend}\PY{p}{(}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{show}\PY{p}{(}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{center}
+    \adjustimage{max size={0.9\linewidth}{0.9\paperheight}}{output_41_0.png}
+    \end{center}
+    { \hspace*{\fill} \\}    
 
 \section{Conclusion}
 
@@ -571,6 +936,8 @@ Review of financial studies, 6(2):327--343.
 stochastic volatility.
 \bibitem{AMST1} Albrecher, H., Mayer, P., Schoutens, W. and Tistaert, J. (2007).
 ``The Little Heston Trap'', Wilmott (1): 83--92.
+\bibitem{Cox1}  Cox, John. "Notes on option pricing I: Constant elasticity of variance diffusions." Unpublished note, Stanford University, Graduate School of Business (1975).
+\bibitem{M5} MScFE630 Computational Finance Module 5: Monte Carlo Methods for Risk Management
 
 \end{thebibliography}
 
