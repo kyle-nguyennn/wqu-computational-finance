@@ -401,7 +401,7 @@
 \section{Introduction
 }
 
-In this paper we go beyond the constant volatility assumption in the Black-Scholes model.  Most of code implemented in this submission is derived from Moldule 5 \cite{M5} of the course. 
+In this paper we go beyond the constant volatility assumption in the Black-Scholes model.  Most of code implemented in this submission is derived from Module 5 \cite{M5} of the course. 
 
 We initialize most variables as given by the question. 
 
@@ -914,6 +914,11 @@ Generating all samples paths takes 2.10s
 
 \section{Conclusion}
 
+A vanilla European call option was priced for a fluctuating volatility condition, using the Heston model. The call price was evaluated as \$13.73, which was verified to be similar to - but lower than - a constant volatility estimate using the Black-Scholes model at \$15.71.
+
+Initially the values calculated for the underlying share price did not agree as expected, with the estimates well outside the expected error range. This was because the volatility term was not equivalent in the two different calculation methods. After resolving this, the CEV model calculated a price of \$8.70 for the underlying share, which agreed closely with the Monte Carlo estimate of \$8.69. This represents an absolute error of 1c and a relative discrepancy of approximately 0.1%.
+
+The agreement between the results from various methods, although expected, provides confidence to choose the most suitable method for a situation with the knowledge that the results are accurate within a small margin of error.
 
 \newpage
 \section*{} \label{bibsection}
