@@ -457,47 +457,477 @@ We initialize most variables as given by the question.
 
 \section{LIBOR Forward Rates, Stock Paths, and Counterparty Firm Values
 }
-The zero coupon bond prices are provided as observed, which means that the interest rate can be determined in the calibration process, along with the other parameters needed for the model. The following code sets bounds for the parameters and finds optimal values within those bounds.
-\begin{lstlisting}
-#minimizing F
-bnds = ((0,1),(0,0.2),(0,0.2), (0.00,0.10))
-opt_val = scipy.optimize.fmin_slsqp(F, (0.3, 0.05, 0.03, 0.05), bounds=bnds)
-opt_alpha = opt_val[0]
-opt_b = opt_val[1]
-opt_sigma = opt_val[2]
-opt_r0 = opt_val[3]
-\end{lstlisting}
-Running this code results in the following values for the model parameters:
-\begin{itemize}
-    \item Optimal alpha: 0.273
-    \item Optimal b: 0.069
-    \item Optimal sigma 0.028
-    \item Optimal r0: 0.075
-\end{itemize}
+
+In this part, we use a sample size of 100000, jointly simulate LIBOR forward rates, stock paths, and counterparty firm values. We assume that the counterparty firm and stock values are uncorrelated with LIBOR forward rates.
+
+\subsection{Calibrate LIBOR forward rate model from zero coupon bond prices
+}
+
+    We initialize the given zero-coupon bond prices:
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{4}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n}{t} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{linspace}\PY{p}{(}\PY{l+m+mi}{0}\PY{p}{,}\PY{l+m+mi}{1}\PY{p}{,}\PY{l+m+mi}{13}\PY{p}{)}
+
+\PY{n}{market\PYZus{}zcb\PYZus{}prices} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{array}\PY{p}{(}\PY{p}{[}\PY{l+m+mf}{1.0}\PY{p}{,} \PY{l+m+mf}{0.9938}\PY{p}{,} \PY{l+m+mf}{0.9876}\PY{p}{,} \PY{l+m+mf}{0.9815}\PY{p}{,} \PY{l+m+mf}{0.9754}\PY{p}{,} \PY{l+m+mf}{0.9694}\PY{p}{,} \PY{l+m+mf}{0.9634}\PY{p}{,} \PY{l+m+mf}{0.9574}\PY{p}{,} \PY{l+m+mf}{0.9516}\PY{p}{,}
+       \PY{l+m+mf}{0.9457}\PY{p}{,} \PY{l+m+mf}{0.9399}\PY{p}{,} \PY{l+m+mf}{0.9342}\PY{p}{,} \PY{l+m+mf}{0.9285}\PY{p}{]}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+    We next create functions to calculate the simulated bond prices from the
+Vasicek model (as well as helper functions A and D). We also define
+function F which is the differences between the bond prices calculated
+by our model and actual market zero-coupon bond prices:
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{5}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{k}{def} \PY{n+nf}{A}\PY{p}{(}\PY{n}{t1}\PY{p}{,} \PY{n}{t2}\PY{p}{,} \PY{n}{alpha}\PY{p}{)}\PY{p}{:}
+    \PY{k}{return} \PY{p}{(}\PY{l+m+mi}{1}\PY{o}{\PYZhy{}}\PY{n}{np}\PY{o}{.}\PY{n}{exp}\PY{p}{(}\PY{o}{\PYZhy{}}\PY{n}{alpha}\PY{o}{*}\PY{p}{(}\PY{n}{t2}\PY{o}{\PYZhy{}}\PY{n}{t1}\PY{p}{)}\PY{p}{)}\PY{p}{)}\PY{o}{/}\PY{n}{alpha}
+\PY{k}{def} \PY{n+nf}{D}\PY{p}{(}\PY{n}{t1}\PY{p}{,} \PY{n}{t2}\PY{p}{,} \PY{n}{alpha}\PY{p}{,} \PY{n}{b}\PY{p}{,} \PY{n}{sigma}\PY{p}{)}\PY{p}{:}
+    \PY{n}{val1} \PY{o}{=} \PY{p}{(}\PY{n}{t2}\PY{o}{\PYZhy{}}\PY{n}{t1}\PY{o}{\PYZhy{}}\PY{n}{A}\PY{p}{(}\PY{n}{t1}\PY{p}{,}\PY{n}{t2}\PY{p}{,}\PY{n}{alpha}\PY{p}{)}\PY{p}{)}\PY{o}{*}\PY{p}{(}\PY{n}{sigma}\PY{o}{*}\PY{o}{*}\PY{l+m+mi}{2}\PY{o}{/}\PY{p}{(}\PY{l+m+mi}{2}\PY{o}{*}\PY{n}{alpha}\PY{o}{*}\PY{o}{*}\PY{l+m+mi}{2}\PY{p}{)}\PY{o}{\PYZhy{}}\PY{n}{b}\PY{p}{)}
+    \PY{n}{val2} \PY{o}{=} \PY{n}{sigma}\PY{o}{*}\PY{o}{*}\PY{l+m+mi}{2}\PY{o}{*}\PY{n}{A}\PY{p}{(}\PY{n}{t1}\PY{p}{,}\PY{n}{t2}\PY{p}{,}\PY{n}{alpha}\PY{p}{)}\PY{o}{*}\PY{o}{*}\PY{l+m+mi}{2}\PY{o}{/}\PY{p}{(}\PY{l+m+mi}{4}\PY{o}{*}\PY{n}{alpha}\PY{p}{)}
+    \PY{k}{return} \PY{n}{val1}\PY{o}{\PYZhy{}}\PY{n}{val2}
+
+\PY{k}{def} \PY{n+nf}{bond\PYZus{}price\PYZus{}fun}\PY{p}{(}\PY{n}{r}\PY{p}{,}\PY{n}{t}\PY{p}{,}\PY{n}{T}\PY{p}{,} \PY{n}{alpha}\PY{p}{,} \PY{n}{b}\PY{p}{,} \PY{n}{sigma}\PY{p}{)}\PY{p}{:}
+    \PY{k}{return} \PY{n}{np}\PY{o}{.}\PY{n}{exp}\PY{p}{(}\PY{o}{\PYZhy{}}\PY{n}{A}\PY{p}{(}\PY{n}{t}\PY{p}{,}\PY{n}{T}\PY{p}{,}\PY{n}{alpha}\PY{p}{)}\PY{o}{*}\PY{n}{r}\PY{o}{+}\PY{n}{D}\PY{p}{(}\PY{n}{t}\PY{p}{,}\PY{n}{T}\PY{p}{,}\PY{n}{alpha}\PY{p}{,}\PY{n}{b}\PY{p}{,}\PY{n}{sigma}\PY{p}{)}\PY{p}{)}
+
+
+\PY{k}{def} \PY{n+nf}{F}\PY{p}{(}\PY{n}{x}\PY{p}{)}\PY{p}{:}
+    \PY{n}{alpha} \PY{o}{=} \PY{n}{x}\PY{p}{[}\PY{l+m+mi}{0}\PY{p}{]}
+    \PY{n}{b} \PY{o}{=} \PY{n}{x}\PY{p}{[}\PY{l+m+mi}{1}\PY{p}{]}
+    \PY{n}{sigma} \PY{o}{=} \PY{n}{x}\PY{p}{[}\PY{l+m+mi}{2}\PY{p}{]}
+    \PY{n}{r0} \PY{o}{=} \PY{n}{x}\PY{p}{[}\PY{l+m+mi}{3}\PY{p}{]}
+    \PY{k}{return} \PY{n+nb}{sum}\PY{p}{(}\PY{n}{np}\PY{o}{.}\PY{n}{abs}\PY{p}{(}\PY{n}{bond\PYZus{}price\PYZus{}fun}\PY{p}{(}\PY{n}{r0}\PY{p}{,}\PY{l+m+mi}{0}\PY{p}{,}\PY{n}{t}\PY{p}{,}\PY{n}{alpha}\PY{p}{,}\PY{n}{b}\PY{p}{,}\PY{n}{sigma}\PY{p}{)}\PY{o}{\PYZhy{}}\PY{n}{market\PYZus{}zcb\PYZus{}prices}\PY{p}{)}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+    We use the fmin\_slsqp function from scipy to calculate the optimal
+model parameters, with a minimum value of F
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{6}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{c+c1}{\PYZsh{}minimizing F}
+\PY{n}{bnds} \PY{o}{=} \PY{p}{(}\PY{p}{(}\PY{l+m+mi}{0}\PY{p}{,}\PY{l+m+mi}{1}\PY{p}{)}\PY{p}{,}\PY{p}{(}\PY{l+m+mi}{0}\PY{p}{,}\PY{l+m+mf}{0.2}\PY{p}{)}\PY{p}{,}\PY{p}{(}\PY{l+m+mi}{0}\PY{p}{,}\PY{l+m+mf}{0.2}\PY{p}{)}\PY{p}{,} \PY{p}{(}\PY{l+m+mf}{0.00}\PY{p}{,}\PY{l+m+mf}{0.10}\PY{p}{)}\PY{p}{)}
+\PY{n}{opt\PYZus{}val} \PY{o}{=} \PY{n}{scipy}\PY{o}{.}\PY{n}{optimize}\PY{o}{.}\PY{n}{fmin\PYZus{}slsqp}\PY{p}{(}\PY{n}{F}\PY{p}{,} \PY{p}{(}\PY{l+m+mf}{0.3}\PY{p}{,} \PY{l+m+mf}{0.05}\PY{p}{,} \PY{l+m+mf}{0.03}\PY{p}{,} \PY{l+m+mf}{0.05}\PY{p}{)}\PY{p}{,} \PY{n}{bounds}\PY{o}{=}\PY{n}{bnds}\PY{p}{)}
+\PY{n}{opt\PYZus{}alpha} \PY{o}{=} \PY{n}{opt\PYZus{}val}\PY{p}{[}\PY{l+m+mi}{0}\PY{p}{]}
+\PY{n}{opt\PYZus{}b} \PY{o}{=} \PY{n}{opt\PYZus{}val}\PY{p}{[}\PY{l+m+mi}{1}\PY{p}{]}
+\PY{n}{opt\PYZus{}sigma} \PY{o}{=} \PY{n}{opt\PYZus{}val}\PY{p}{[}\PY{l+m+mi}{2}\PY{p}{]}
+\PY{n}{opt\PYZus{}r0} \PY{o}{=} \PY{n}{opt\PYZus{}val}\PY{p}{[}\PY{l+m+mi}{3}\PY{p}{]}
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{Verbatim}[commandchars=\\\{\}]
+Optimization terminated successfully.    (Exit mode 0)
+            Current function value: 0.0002564991813429618
+            Iterations: 10
+            Function evaluations: 74
+            Gradient evaluations: 10
+    \end{Verbatim}
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{7}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n+nb}{print}\PY{p}{(}\PY{l+s+s2}{\PYZdq{}}\PY{l+s+s2}{Optimal alpha: }\PY{l+s+si}{\PYZob{}:.3f\PYZcb{}}\PY{l+s+s2}{\PYZdq{}}\PY{o}{.}\PY{n}{format}\PY{p}{(}\PY{n}{opt\PYZus{}val}\PY{p}{[}\PY{l+m+mi}{0}\PY{p}{]}\PY{p}{)}\PY{p}{)}
+\PY{n+nb}{print}\PY{p}{(}\PY{l+s+s2}{\PYZdq{}}\PY{l+s+s2}{Optimal b: }\PY{l+s+si}{\PYZob{}:.3f\PYZcb{}}\PY{l+s+s2}{\PYZdq{}}\PY{o}{.}\PY{n}{format}\PY{p}{(}\PY{n}{opt\PYZus{}val}\PY{p}{[}\PY{l+m+mi}{1}\PY{p}{]}\PY{p}{)}\PY{p}{)}
+\PY{n+nb}{print}\PY{p}{(}\PY{l+s+s2}{\PYZdq{}}\PY{l+s+s2}{Optimal sigma }\PY{l+s+si}{\PYZob{}:.3f\PYZcb{}}\PY{l+s+s2}{\PYZdq{}}\PY{o}{.}\PY{n}{format}\PY{p}{(}\PY{n}{opt\PYZus{}val}\PY{p}{[}\PY{l+m+mi}{2}\PY{p}{]}\PY{p}{)}\PY{p}{)}
+\PY{n+nb}{print}\PY{p}{(}\PY{l+s+s2}{\PYZdq{}}\PY{l+s+s2}{Optimal r0: }\PY{l+s+si}{\PYZob{}:.3f\PYZcb{}}\PY{l+s+s2}{\PYZdq{}}\PY{o}{.}\PY{n}{format}\PY{p}{(}\PY{n}{opt\PYZus{}val}\PY{p}{[}\PY{l+m+mi}{3}\PY{p}{]}\PY{p}{)}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{Verbatim}[commandchars=\\\{\}]
+Optimal alpha: 0.273
+Optimal b: 0.069
+Optimal sigma 0.028
+Optimal r0: 0.075
+    \end{Verbatim}
+
+    We plot the actual market bond prices, with model-derived bond prices,
+and they look like a close fit.
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{8}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n}{model\PYZus{}prices} \PY{o}{=} \PY{n}{bond\PYZus{}price\PYZus{}fun}\PY{p}{(}\PY{n}{opt\PYZus{}r0}\PY{p}{,}\PY{l+m+mi}{0}\PY{p}{,}\PY{n}{t}\PY{p}{,} \PY{n}{opt\PYZus{}alpha}\PY{p}{,} \PY{n}{opt\PYZus{}b}\PY{p}{,} \PY{n}{opt\PYZus{}sigma}\PY{p}{)}
+\PY{n}{model\PYZus{}yield} \PY{o}{=} \PY{o}{\PYZhy{}}\PY{n}{np}\PY{o}{.}\PY{n}{log}\PY{p}{(}\PY{n}{model\PYZus{}prices}\PY{p}{)}\PY{o}{/}\PY{n}{t}
+
+\PY{n}{plt}\PY{o}{.}\PY{n}{plot}\PY{p}{(}\PY{n}{t}\PY{p}{,}\PY{n}{market\PYZus{}zcb\PYZus{}prices}\PY{p}{,} \PY{n}{label}\PY{o}{=}\PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{Market Prices}\PY{l+s+s1}{\PYZsq{}}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{plot}\PY{p}{(}\PY{n}{t}\PY{p}{,} \PY{n}{model\PYZus{}prices}\PY{p}{,} \PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{.}\PY{l+s+s1}{\PYZsq{}}\PY{p}{,} \PY{n}{label}\PY{o}{=}\PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{Calibrated Prices}\PY{l+s+s1}{\PYZsq{}}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{legend}\PY{p}{(}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{show}\PY{p}{(}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+
+    \begin{center}
+    \adjustimage{max size={0.9\linewidth}{0.9\paperheight}}{images/output_15_1.png}
+    \end{center}
+    { \hspace*{\fill} \\}
+
+
+\subsection{Simulate LIBOR rate paths
+}
+
+
+    We first initialize the parameter \(\sigma_j\)
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{9}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n}{sigmaj} \PY{o}{=} \PY{l+m+mf}{0.2}
+\end{Verbatim}
+\end{tcolorbox}
+
+    We use paramters we obtained above to recreate the Vasicek bond prices:
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{10}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{k}{def} \PY{n+nf}{A}\PY{p}{(}\PY{n}{t1}\PY{p}{,} \PY{n}{t2}\PY{p}{)}\PY{p}{:}
+    \PY{k}{return} \PY{p}{(}\PY{l+m+mi}{1}\PY{o}{\PYZhy{}}\PY{n}{np}\PY{o}{.}\PY{n}{exp}\PY{p}{(}\PY{o}{\PYZhy{}}\PY{n}{opt\PYZus{}alpha}\PY{o}{*}\PY{p}{(}\PY{n}{t2}\PY{o}{\PYZhy{}}\PY{n}{t1}\PY{p}{)}\PY{p}{)}\PY{p}{)}\PY{o}{/}\PY{n}{opt\PYZus{}alpha}
+
+\PY{k}{def} \PY{n+nf}{C}\PY{p}{(}\PY{n}{t1}\PY{p}{,} \PY{n}{t2}\PY{p}{)}\PY{p}{:}
+    \PY{n}{val1} \PY{o}{=} \PY{p}{(}\PY{n}{t2}\PY{o}{\PYZhy{}}\PY{n}{t1}\PY{o}{\PYZhy{}}\PY{n}{A}\PY{p}{(}\PY{n}{t1}\PY{p}{,}\PY{n}{t2}\PY{p}{)}\PY{p}{)}\PY{o}{*}\PY{p}{(}\PY{n}{opt\PYZus{}sigma}\PY{o}{*}\PY{o}{*}\PY{l+m+mi}{2}\PY{o}{/}\PY{p}{(}\PY{l+m+mi}{2}\PY{o}{*}\PY{n}{opt\PYZus{}alpha}\PY{o}{*}\PY{o}{*}\PY{l+m+mi}{2}\PY{p}{)}\PY{o}{\PYZhy{}}\PY{n}{opt\PYZus{}b}\PY{p}{)}
+    \PY{n}{val2} \PY{o}{=} \PY{n}{opt\PYZus{}sigma}\PY{o}{*}\PY{o}{*}\PY{l+m+mi}{2}\PY{o}{*}\PY{n}{A}\PY{p}{(}\PY{n}{t1}\PY{p}{,}\PY{n}{t2}\PY{p}{)}\PY{o}{*}\PY{o}{*}\PY{l+m+mi}{2}\PY{o}{/}\PY{p}{(}\PY{l+m+mi}{4}\PY{o}{*}\PY{n}{opt\PYZus{}alpha}\PY{p}{)}
+    \PY{k}{return} \PY{n}{val1} \PY{o}{\PYZhy{}} \PY{n}{val2}
+
+\PY{k}{def} \PY{n+nf}{bond\PYZus{}price}\PY{p}{(}\PY{n}{r}\PY{p}{,}\PY{n}{t}\PY{p}{,}\PY{n}{T}\PY{p}{)}\PY{p}{:}
+    \PY{k}{return} \PY{n}{np}\PY{o}{.}\PY{n}{exp}\PY{p}{(}\PY{o}{\PYZhy{}}\PY{n}{A}\PY{p}{(}\PY{n}{t}\PY{p}{,}\PY{n}{T}\PY{p}{)}\PY{o}{*}\PY{n}{r}\PY{o}{+}\PY{n}{C}\PY{p}{(}\PY{n}{t}\PY{p}{,}\PY{n}{T}\PY{p}{)}\PY{p}{)}
+
+\PY{n}{vasi\PYZus{}bond} \PY{o}{=} \PY{n}{bond\PYZus{}price}\PY{p}{(}\PY{n}{opt\PYZus{}r0}\PY{p}{,} \PY{l+m+mi}{0}\PY{p}{,} \PY{n}{t}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+    The prices calculated from the Vasicek model are close to the ZCB prices
+given by the assignment:
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{11}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n+nb}{print}\PY{p}{(}\PY{n}{vasi\PYZus{}bond}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{Verbatim}[commandchars=\\\{\}]
+[1.         0.99377572 0.98760087 0.98147516 0.97539831 0.96936998
+ 0.96338983 0.95745752 0.95157266 0.94573489 0.93994381 0.93419901
+ 0.9285001 ]
+    \end{Verbatim}
+
+    We now initialize the matrices we will use to store the Monte Carlo
+simulations, for both basic Monte Carlo and Predictor-Corrector method.
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{12}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n}{n\PYZus{}simulations} \PY{o}{=} \PY{n}{sample\PYZus{}size}
+\PY{n}{n\PYZus{}steps} \PY{o}{=} \PY{n+nb}{len}\PY{p}{(}\PY{n}{t}\PY{p}{)}
+
+\PY{n}{mc\PYZus{}forward} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{ones}\PY{p}{(}\PY{p}{[}\PY{n}{n\PYZus{}simulations}\PY{p}{,} \PY{n}{n\PYZus{}steps}\PY{o}{\PYZhy{}}\PY{l+m+mi}{1}\PY{p}{]}\PY{p}{)}\PY{o}{*}\PY{p}{(}\PY{n}{vasi\PYZus{}bond}\PY{p}{[}\PY{p}{:}\PY{o}{\PYZhy{}}\PY{l+m+mi}{1}\PY{p}{]}\PY{o}{\PYZhy{}}\PY{n}{vasi\PYZus{}bond}\PY{p}{[}\PY{l+m+mi}{1}\PY{p}{:}\PY{p}{]}\PY{p}{)}\PY{o}{/}\PY{p}{(}\PY{n}{vasi\PYZus{}bond}\PY{p}{[}\PY{l+m+mi}{1}\PY{p}{:}\PY{p}{]}\PY{p}{)}
+\PY{n}{predcorr\PYZus{}forward} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{ones}\PY{p}{(}\PY{p}{[}\PY{n}{n\PYZus{}simulations}\PY{p}{,} \PY{n}{n\PYZus{}steps}\PY{o}{\PYZhy{}}\PY{l+m+mi}{1}\PY{p}{]}\PY{p}{)}\PY{o}{*}\PY{p}{(}\PY{n}{vasi\PYZus{}bond}\PY{p}{[}\PY{p}{:}\PY{o}{\PYZhy{}}\PY{l+m+mi}{1}\PY{p}{]}\PY{o}{\PYZhy{}}\PY{n}{vasi\PYZus{}bond}\PY{p}{[}\PY{l+m+mi}{1}\PY{p}{:}\PY{p}{]}\PY{p}{)}\PY{o}{/}\PY{p}{(}\PY{n}{vasi\PYZus{}bond}\PY{p}{[}\PY{l+m+mi}{1}\PY{p}{:}\PY{p}{]}\PY{p}{)}
+\PY{n}{predcorr\PYZus{}capfac} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{ones}\PY{p}{(}\PY{p}{[}\PY{n}{n\PYZus{}simulations}\PY{p}{,} \PY{n}{n\PYZus{}steps}\PY{p}{]}\PY{p}{)}
+\PY{n}{mc\PYZus{}capfac} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{ones}\PY{p}{(}\PY{p}{[}\PY{n}{n\PYZus{}simulations}\PY{p}{,} \PY{n}{n\PYZus{}steps}\PY{p}{]}\PY{p}{)}
+
+\PY{n}{delta} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{ones}\PY{p}{(}\PY{p}{[}\PY{n}{n\PYZus{}simulations}\PY{p}{,} \PY{n}{n\PYZus{}steps} \PY{o}{\PYZhy{}} \PY{l+m+mi}{1}\PY{p}{]}\PY{p}{)}\PY{o}{*}\PY{p}{(}\PY{n}{t}\PY{p}{[}\PY{l+m+mi}{1}\PY{p}{:}\PY{p}{]}\PY{o}{\PYZhy{}}\PY{n}{t}\PY{p}{[}\PY{p}{:}\PY{o}{\PYZhy{}}\PY{l+m+mi}{1}\PY{p}{]}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+    We now run the Monte Carlo simulation for each time step:
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{13}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{k}{for} \PY{n}{i} \PY{o+ow}{in} \PY{n+nb}{range}\PY{p}{(}\PY{l+m+mi}{1}\PY{p}{,} \PY{n}{n\PYZus{}steps}\PY{p}{)}\PY{p}{:}
+    \PY{n}{Z} \PY{o}{=} \PY{n}{norm}\PY{o}{.}\PY{n}{rvs}\PY{p}{(}\PY{n}{size}\PY{o}{=}\PY{p}{[}\PY{n}{n\PYZus{}simulations}\PY{p}{,}\PY{l+m+mi}{1}\PY{p}{]}\PY{p}{)}
+    
+    \PY{n}{muhat} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{cumsum}\PY{p}{(}\PY{n}{delta}\PY{p}{[}\PY{p}{:}\PY{p}{,} \PY{n}{i}\PY{p}{:}\PY{p}{]}\PY{o}{*}\PY{n}{mc\PYZus{}forward}\PY{p}{[}\PY{p}{:}\PY{p}{,} \PY{n}{i}\PY{p}{:}\PY{p}{]}\PY{o}{*}\PY{n}{sigmaj}\PY{o}{*}\PY{o}{*}\PY{l+m+mi}{2}\PY{o}{/}\PY{p}{(}\PY{l+m+mi}{1}\PY{o}{+}\PY{n}{delta}\PY{p}{[}\PY{p}{:}\PY{p}{,} \PY{n}{i}\PY{p}{:}\PY{p}{]}\PY{o}{*}\PY{n}{mc\PYZus{}forward}\PY{p}{[}\PY{p}{:}\PY{p}{,}\PY{n}{i}\PY{p}{:}\PY{p}{]}\PY{p}{)}\PY{p}{,} \PY{n}{axis}\PY{o}{=}\PY{l+m+mi}{1}\PY{p}{)}
+    \PY{n}{mc\PYZus{}forward}\PY{p}{[}\PY{p}{:}\PY{p}{,}\PY{n}{i}\PY{p}{:}\PY{p}{]} \PY{o}{=} \PY{n}{mc\PYZus{}forward}\PY{p}{[}\PY{p}{:}\PY{p}{,}\PY{n}{i}\PY{p}{:}\PY{p}{]}\PY{o}{*}\PY{n}{np}\PY{o}{.}\PY{n}{exp}\PY{p}{(}\PY{p}{(}\PY{n}{muhat}\PY{o}{\PYZhy{}}\PY{n}{sigmaj}\PY{o}{*}\PY{o}{*}\PY{l+m+mi}{2}\PY{o}{/}\PY{l+m+mi}{2}\PY{p}{)}\PY{o}{*}\PY{n}{delta}\PY{p}{[}\PY{p}{:}\PY{p}{,}\PY{n}{i}\PY{p}{:}\PY{p}{]}\PY{o}{+}\PY{n}{sigmaj}\PY{o}{*}\PY{n}{np}\PY{o}{.}\PY{n}{sqrt}\PY{p}{(}\PY{n}{delta}\PY{p}{[}\PY{p}{:}\PY{p}{,}\PY{n}{i}\PY{p}{:}\PY{p}{]}\PY{p}{)}\PY{o}{*}\PY{n}{Z}\PY{p}{)}
+    
+    \PY{n}{mu\PYZus{}initial} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{cumsum}\PY{p}{(}\PY{n}{delta}\PY{p}{[}\PY{p}{:}\PY{p}{,}\PY{n}{i}\PY{p}{:}\PY{p}{]}\PY{o}{*}\PY{n}{predcorr\PYZus{}forward}\PY{p}{[}\PY{p}{:}\PY{p}{,}\PY{n}{i}\PY{p}{:}\PY{p}{]}\PY{o}{*}\PY{n}{sigmaj}\PY{o}{*}\PY{o}{*}\PY{l+m+mi}{2}\PY{o}{/}\PY{p}{(}\PY{l+m+mi}{1}\PY{o}{+}\PY{n}{delta}\PY{p}{[}\PY{p}{:}\PY{p}{,}\PY{n}{i}\PY{p}{:}\PY{p}{]}\PY{o}{*}\PY{n}{predcorr\PYZus{}forward}\PY{p}{[}\PY{p}{:}\PY{p}{,}\PY{n}{i}\PY{p}{:}\PY{p}{]}\PY{p}{)}\PY{p}{,} \PY{n}{axis}\PY{o}{=}\PY{l+m+mi}{1}\PY{p}{)}
+    \PY{n}{for\PYZus{}temp} \PY{o}{=} \PY{n}{predcorr\PYZus{}forward}\PY{p}{[}\PY{p}{:}\PY{p}{,}\PY{n}{i}\PY{p}{:}\PY{p}{]}\PY{o}{*}\PY{n}{np}\PY{o}{.}\PY{n}{exp}\PY{p}{(}\PY{p}{(}\PY{n}{mu\PYZus{}initial}\PY{o}{\PYZhy{}}\PY{n}{sigmaj}\PY{o}{*}\PY{o}{*}\PY{l+m+mi}{2}\PY{o}{/}\PY{l+m+mi}{2}\PY{p}{)}\PY{o}{*}\PY{n}{delta}\PY{p}{[}\PY{p}{:}\PY{p}{,}\PY{n}{i}\PY{p}{:}\PY{p}{]}\PY{o}{+}\PY{n}{sigmaj}\PY{o}{*}\PY{n}{np}\PY{o}{.}\PY{n}{sqrt}\PY{p}{(}\PY{n}{delta}\PY{p}{[}\PY{p}{:}\PY{p}{,}\PY{n}{i}\PY{p}{:}\PY{p}{]}\PY{p}{)}\PY{o}{*}\PY{n}{Z}\PY{p}{)}
+    \PY{n}{mu\PYZus{}term} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{cumsum}\PY{p}{(}\PY{n}{delta}\PY{p}{[}\PY{p}{:}\PY{p}{,}\PY{n}{i}\PY{p}{:}\PY{p}{]}\PY{o}{*}\PY{n}{for\PYZus{}temp}\PY{o}{*}\PY{n}{sigmaj}\PY{o}{*}\PY{o}{*}\PY{l+m+mi}{2}\PY{o}{/}\PY{p}{(}\PY{l+m+mi}{1}\PY{o}{+}\PY{n}{delta}\PY{p}{[}\PY{p}{:}\PY{p}{,}\PY{n}{i}\PY{p}{:}\PY{p}{]}\PY{o}{*}\PY{n}{for\PYZus{}temp}\PY{p}{)}\PY{p}{,} \PY{n}{axis}\PY{o}{=}\PY{l+m+mi}{1}\PY{p}{)}
+    \PY{n}{predcorr\PYZus{}forward}\PY{p}{[}\PY{p}{:}\PY{p}{,}\PY{n}{i}\PY{p}{:}\PY{p}{]} \PY{o}{=} \PY{n}{predcorr\PYZus{}forward}\PY{p}{[}\PY{p}{:}\PY{p}{,}\PY{n}{i}\PY{p}{:}\PY{p}{]}\PY{o}{*}\PY{n}{np}\PY{o}{.}\PY{n}{exp}\PY{p}{(}\PY{p}{(}\PY{n}{mu\PYZus{}initial}\PY{o}{+}\PY{n}{mu\PYZus{}term}\PY{o}{\PYZhy{}}\PY{n}{sigmaj}\PY{o}{*}\PY{o}{*}\PY{l+m+mi}{2}\PY{p}{)}\PY{o}{*}\PY{n}{delta}\PY{p}{[}\PY{p}{:}\PY{p}{,}\PY{n}{i}\PY{p}{:}\PY{p}{]}\PY{o}{/}\PY{l+m+mi}{2}\PY{o}{+}\PY{n}{sigmaj}\PY{o}{*}\PY{n}{np}\PY{o}{.}\PY{n}{sqrt}\PY{p}{(}\PY{n}{delta}\PY{p}{[}\PY{p}{:}\PY{p}{,}\PY{n}{i}\PY{p}{:}\PY{p}{]}\PY{p}{)}\PY{o}{*}\PY{n}{Z}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+    From our Monte Carlo simulation, we now calculate the capitalization
+factors and bond prices, and plot them to compare them with the Vasicek
+bond prices.
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{14}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n}{mc\PYZus{}capfac}\PY{p}{[}\PY{p}{:}\PY{p}{,}\PY{l+m+mi}{1}\PY{p}{:}\PY{p}{]} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{cumprod}\PY{p}{(}\PY{l+m+mi}{1}\PY{o}{+}\PY{n}{mc\PYZus{}forward}\PY{p}{,} \PY{n}{axis}\PY{o}{=}\PY{l+m+mi}{1}\PY{p}{)}
+\PY{n}{predcorr\PYZus{}capfac}\PY{p}{[}\PY{p}{:}\PY{p}{,}\PY{l+m+mi}{1}\PY{p}{:}\PY{p}{]} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{cumprod}\PY{p}{(}\PY{l+m+mi}{1}\PY{o}{+}\PY{n}{predcorr\PYZus{}forward}\PY{p}{,} \PY{n}{axis}\PY{o}{=}\PY{l+m+mi}{1}\PY{p}{)}
+
+\PY{n}{mc\PYZus{}price} \PY{o}{=} \PY{n}{mc\PYZus{}capfac}\PY{o}{*}\PY{o}{*}\PY{p}{(}\PY{o}{\PYZhy{}}\PY{l+m+mi}{1}\PY{p}{)}
+\PY{n}{predcorr\PYZus{}price} \PY{o}{=} \PY{n}{predcorr\PYZus{}capfac}\PY{o}{*}\PY{o}{*}\PY{p}{(}\PY{o}{\PYZhy{}}\PY{l+m+mi}{1}\PY{p}{)}
+
+\PY{n}{mc\PYZus{}final} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{mean}\PY{p}{(}\PY{n}{mc\PYZus{}price}\PY{p}{,} \PY{n}{axis}\PY{o}{=}\PY{l+m+mi}{0}\PY{p}{)}
+\PY{n}{predcorr\PYZus{}final} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{mean}\PY{p}{(}\PY{n}{predcorr\PYZus{}price}\PY{p}{,} \PY{n}{axis}\PY{o}{=}\PY{l+m+mi}{0}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{15}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n}{plt}\PY{o}{.}\PY{n}{xlabel}\PY{p}{(}\PY{l+s+s2}{\PYZdq{}}\PY{l+s+s2}{Maturity}\PY{l+s+s2}{\PYZdq{}}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{ylabel}\PY{p}{(}\PY{l+s+s2}{\PYZdq{}}\PY{l+s+s2}{Bond Price}\PY{l+s+s2}{\PYZdq{}}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{plot}\PY{p}{(}\PY{n}{t}\PY{p}{,}\PY{n}{vasi\PYZus{}bond}\PY{p}{,} \PY{n}{label}\PY{o}{=}\PY{l+s+s2}{\PYZdq{}}\PY{l+s+s2}{Vasicek Bond Prices}\PY{l+s+s2}{\PYZdq{}}\PY{p}{)}
+
+\PY{n}{plt}\PY{o}{.}\PY{n}{plot}\PY{p}{(}\PY{n}{t}\PY{p}{,} \PY{n}{mc\PYZus{}final}\PY{p}{,} \PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{o}\PY{l+s+s1}{\PYZsq{}}\PY{p}{,} \PY{n}{label}\PY{o}{=}\PY{l+s+s2}{\PYZdq{}}\PY{l+s+s2}{Simple Monte Carlo Bond Prices}\PY{l+s+s2}{\PYZdq{}}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{plot}\PY{p}{(}\PY{n}{t}\PY{p}{,} \PY{n}{predcorr\PYZus{}final}\PY{p}{,} \PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{x}\PY{l+s+s1}{\PYZsq{}}\PY{p}{,} \PY{n}{label}\PY{o}{=}\PY{l+s+s2}{\PYZdq{}}\PY{l+s+s2}{Predictor\PYZhy{}Corrector Bond Prices}\PY{l+s+s2}{\PYZdq{}}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{legend}\PY{p}{(}\PY{p}{)}
+\PY{n}{plt}\PY{o}{.}\PY{n}{show}\PY{p}{(}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{center}
+    \adjustimage{max size={0.9\linewidth}{0.9\paperheight}}{images/output_29_0.png}
+    \end{center}
+    { \hspace*{\fill} \\}
+    
+    From our simulation of forward rates (we take the Predictor-Corrector
+method, we use the formula
+\(e^{r_{t_i} (t_{i+1}-t_i)} = 1 + L(t_i,t_{i+1})(t_{i+1}-t_i)\) to
+obtain the continuous compounded interest rates:
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{16}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n}{r\PYZus{}sim} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{log}\PY{p}{(}\PY{l+m+mi}{1} \PY{o}{+} \PY{n}{predcorr\PYZus{}forward}\PY{o}{*}\PY{p}{(}\PY{n}{delta}\PY{p}{)}\PY{p}{)}\PY{o}{/}\PY{n}{delta}
+\end{Verbatim}
+\end{tcolorbox}
+
+    We also calculate an annualized form of the interest rates:
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{17}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n}{r\PYZus{}sim\PYZus{}annualized} \PY{o}{=} \PY{n}{pd}\PY{o}{.}\PY{n}{DataFrame}\PY{p}{(}\PY{n}{r\PYZus{}sim}\PY{o}{/}\PY{n}{delta}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{18}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n}{r\PYZus{}sim\PYZus{}annualized}
+\end{Verbatim}
+\end{tcolorbox}
+
+            \begin{tcolorbox}[breakable, size=fbox, boxrule=.5pt, pad at break*=1mm, opacityfill=0]
+\prompt{Out}{outcolor}{18}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+              0         1         2         3         4         5         6  \textbackslash{}
+0       0.07514  0.066032  0.073336  0.075253  0.065992  0.066157  0.066794
+1       0.07514  0.072083  0.076464  0.081468  0.079424  0.082719  0.085049
+2       0.07514  0.078051  0.079510  0.077283  0.080866  0.078631  0.085738
+3       0.07514  0.067973  0.066249  0.068189  0.061341  0.061618  0.058422
+4       0.07514  0.068828  0.067538  0.068650  0.064811  0.064151  0.067009
+{\ldots}         {\ldots}       {\ldots}       {\ldots}       {\ldots}       {\ldots}       {\ldots}       {\ldots}
+999995  0.07514  0.080051  0.081460  0.080036  0.078720  0.085394  0.090455
+999996  0.07514  0.075648  0.076774  0.074305  0.081762  0.077945  0.075159
+999997  0.07514  0.080705  0.077654  0.076033  0.068839  0.066677  0.062133
+999998  0.07514  0.085071  0.085031  0.082831  0.083125  0.087771  0.077675
+999999  0.07514  0.079983  0.080474  0.078617  0.073621  0.071960  0.072492
+
+               7         8         9        10        11
+0       0.071269  0.076366  0.074026  0.080224  0.076966
+1       0.085452  0.094079  0.106641  0.120261  0.116014
+2       0.082785  0.072790  0.076300  0.066587  0.063343
+3       0.061475  0.058621  0.057793  0.058849  0.054900
+4       0.063756  0.062794  0.065755  0.066556  0.072365
+{\ldots}          {\ldots}       {\ldots}       {\ldots}       {\ldots}       {\ldots}
+999995  0.091226  0.086187  0.086976  0.081274  0.075437
+999996  0.079487  0.069895  0.067660  0.062574  0.059106
+999997  0.059384  0.056089  0.055484  0.056012  0.054232
+999998  0.075775  0.075541  0.073908  0.078261  0.073692
+999999  0.068380  0.066112  0.071977  0.071854  0.065560
+
+[1000000 rows x 12 columns]
+\end{Verbatim}
+\end{tcolorbox}
+        
+\subsection{Generate stock and firm values
+}
+
+    Similar to the first groupwork assignment, we use a Cholesky
+decomposition to generate the correlated price paths
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{19}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{k}{def} \PY{n+nf}{next\PYZus{}share\PYZus{}price}\PY{p}{(}\PY{n}{prev\PYZus{}price}\PY{p}{,} \PY{n}{r}\PY{p}{,} \PY{n}{dT}\PY{p}{,} \PY{n}{sigma\PYZus{}const}\PY{p}{,} \PY{n}{gamma}\PY{p}{,} \PY{n}{sample\PYZus{}size}\PY{p}{,} \PY{n}{Z}\PY{p}{,} \PY{n}{varying\PYZus{}vol} \PY{o}{=} \PY{k+kc}{True}\PY{p}{)}\PY{p}{:}
+
+    \PY{k}{if} \PY{n}{varying\PYZus{}vol}\PY{p}{:}
+        \PY{n}{sigma} \PY{o}{=} \PY{n}{sigma\PYZus{}const}\PY{o}{*}\PY{p}{(}\PY{n}{prev\PYZus{}price}\PY{p}{)}\PY{o}{*}\PY{o}{*}\PY{p}{(}\PY{n}{gamma}\PY{o}{\PYZhy{}}\PY{l+m+mi}{1}\PY{p}{)}
+    \PY{k}{else}\PY{p}{:}
+        \PY{n}{sigma} \PY{o}{=} \PY{n}{sigma\PYZus{}const}\PY{o}{*}\PY{p}{(}\PY{n}{S0}\PY{p}{)}\PY{o}{*}\PY{o}{*}\PY{p}{(}\PY{n}{gamma}\PY{o}{\PYZhy{}}\PY{l+m+mi}{1}\PY{p}{)}
+    
+    \PY{k}{return} \PY{n}{prev\PYZus{}price}\PY{o}{*}\PY{n}{np}\PY{o}{.}\PY{n}{exp}\PY{p}{(}\PY{n}{np}\PY{o}{.}\PY{n}{cumsum}\PY{p}{(}\PY{p}{(}\PY{n}{r}\PY{o}{\PYZhy{}}\PY{p}{(}\PY{n}{sigma}\PY{o}{*}\PY{o}{*}\PY{l+m+mi}{2}\PY{p}{)}\PY{o}{/}\PY{l+m+mi}{2}\PY{p}{)}\PY{o}{*}\PY{p}{(}\PY{n}{dT}\PY{p}{)}\PY{o}{+}\PY{p}{(}\PY{n}{sigma}\PY{p}{)}\PY{o}{*}\PY{p}{(}\PY{n}{np}\PY{o}{.}\PY{n}{sqrt}\PY{p}{(}\PY{n}{dT}\PY{p}{)}\PY{p}{)}\PY{o}{*}\PY{n}{Z}\PY{p}{,}\PY{l+m+mi}{1}\PY{p}{)}\PY{p}{)}
+
+\PY{k}{def} \PY{n+nf}{generate\PYZus{}share\PYZus{}and\PYZus{}firm\PYZus{}price}\PY{p}{(}\PY{n}{S0}\PY{p}{,} \PY{n}{v\PYZus{}0}\PY{p}{,} \PY{n}{r\PYZus{}sim}\PY{p}{,} \PY{n}{sigma\PYZus{}const}\PY{p}{,} \PY{n}{gamma}\PY{p}{,} \PY{n}{corr}\PY{p}{,} \PY{n}{T}\PY{p}{,} \PY{n}{sample\PYZus{}size}\PY{p}{,} \PY{n}{timesteps} \PY{o}{=} \PY{l+m+mi}{12}\PY{p}{)}\PY{p}{:}
+    \PY{n}{corr\PYZus{}matrix} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{array}\PY{p}{(}\PY{p}{[}\PY{p}{[}\PY{l+m+mi}{1}\PY{p}{,} \PY{n}{corr}\PY{p}{]}\PY{p}{,} \PY{p}{[}\PY{n}{corr}\PY{p}{,} \PY{l+m+mi}{1}\PY{p}{]}\PY{p}{]}\PY{p}{)}
+    \PY{n}{norm\PYZus{}matrix} \PY{o}{=} \PY{n}{stats}\PY{o}{.}\PY{n}{norm}\PY{o}{.}\PY{n}{rvs}\PY{p}{(}\PY{n}{size} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{array}\PY{p}{(}\PY{p}{[}\PY{n}{sample\PYZus{}size}\PY{p}{,} \PY{l+m+mi}{2}\PY{p}{,} \PY{n}{timesteps}\PY{p}{]}\PY{p}{)}\PY{p}{)}
+    \PY{n}{corr\PYZus{}norm\PYZus{}matrix} \PY{o}{=} \PY{n}{np}\PY{o}{.}\PY{n}{matmul}\PY{p}{(}\PY{n}{np}\PY{o}{.}\PY{n}{linalg}\PY{o}{.}\PY{n}{cholesky}\PY{p}{(}\PY{n}{corr\PYZus{}matrix}\PY{p}{)}\PY{p}{,} \PY{n}{norm\PYZus{}matrix}\PY{p}{)}
+    
+    
+    \PY{n}{share\PYZus{}price\PYZus{}path} \PY{o}{=} \PY{n}{pd}\PY{o}{.}\PY{n}{DataFrame}\PY{p}{(}\PY{n}{next\PYZus{}share\PYZus{}price}\PY{p}{(}\PY{n}{S0}\PY{p}{,} \PY{n}{r\PYZus{}sim}\PY{p}{,} \PY{l+m+mi}{1}\PY{o}{/}\PY{n}{timesteps}\PY{p}{,} \PY{n}{sigma\PYZus{}const}\PY{p}{,} \PY{n}{gamma}\PY{p}{,} \PY{n}{sample\PYZus{}size}\PY{p}{,} \PY{n}{Z}\PY{o}{=}\PY{n}{corr\PYZus{}norm\PYZus{}matrix}\PY{p}{[}\PY{p}{:}\PY{p}{,}\PY{l+m+mi}{0}\PY{p}{,}\PY{p}{]}\PY{p}{)}\PY{p}{)}
+    \PY{n}{share\PYZus{}price\PYZus{}path} \PY{o}{=} \PY{n}{share\PYZus{}price\PYZus{}path}\PY{o}{.}\PY{n}{transpose}\PY{p}{(}\PY{p}{)}
+    
+    \PY{n}{first\PYZus{}row} \PY{o}{=} \PY{n}{pd}\PY{o}{.}\PY{n}{DataFrame}\PY{p}{(}\PY{p}{[}\PY{n}{S0}\PY{p}{]}\PY{o}{*}\PY{n}{sample\PYZus{}size}\PY{p}{)}
+    \PY{n}{first\PYZus{}row} \PY{o}{=} \PY{n}{first\PYZus{}row}\PY{o}{.}\PY{n}{transpose}\PY{p}{(}\PY{p}{)}
+    \PY{n}{share\PYZus{}price\PYZus{}path} \PY{o}{=} \PY{n}{pd}\PY{o}{.}\PY{n}{concat}\PY{p}{(}\PY{p}{[}\PY{n}{first\PYZus{}row}\PY{p}{,} \PY{n}{share\PYZus{}price\PYZus{}path}\PY{p}{]}\PY{p}{)}
+    \PY{n}{share\PYZus{}price\PYZus{}path} \PY{o}{=} \PY{n}{share\PYZus{}price\PYZus{}path}\PY{o}{.}\PY{n}{reset\PYZus{}index}\PY{p}{(}\PY{n}{drop}\PY{o}{=}\PY{k+kc}{True}\PY{p}{)}
+
+    \PY{n}{firm\PYZus{}price\PYZus{}path} \PY{o}{=} \PY{n}{pd}\PY{o}{.}\PY{n}{DataFrame}\PY{p}{(}\PY{n}{next\PYZus{}share\PYZus{}price}\PY{p}{(}\PY{n}{v\PYZus{}0}\PY{p}{,} \PY{n}{r\PYZus{}sim}\PY{p}{,} \PY{l+m+mi}{1}\PY{o}{/}\PY{n}{timesteps}\PY{p}{,} \PY{n}{sigma\PYZus{}const}\PY{p}{,} \PY{n}{gamma}\PY{p}{,} \PY{n}{sample\PYZus{}size}\PY{p}{,} \PY{n}{Z}\PY{o}{=}\PY{n}{corr\PYZus{}norm\PYZus{}matrix}\PY{p}{[}\PY{p}{:}\PY{p}{,}\PY{l+m+mi}{1}\PY{p}{,}\PY{p}{]}\PY{p}{)}\PY{p}{)}
+    \PY{n}{firm\PYZus{}price\PYZus{}path} \PY{o}{=} \PY{n}{firm\PYZus{}price\PYZus{}path}\PY{o}{.}\PY{n}{transpose}\PY{p}{(}\PY{p}{)}
+    
+    \PY{n}{first\PYZus{}row} \PY{o}{=} \PY{n}{pd}\PY{o}{.}\PY{n}{DataFrame}\PY{p}{(}\PY{p}{[}\PY{n}{v\PYZus{}0}\PY{p}{]}\PY{o}{*}\PY{n}{sample\PYZus{}size}\PY{p}{)}
+    \PY{n}{first\PYZus{}row} \PY{o}{=} \PY{n}{first\PYZus{}row}\PY{o}{.}\PY{n}{transpose}\PY{p}{(}\PY{p}{)}
+    \PY{n}{firm\PYZus{}price\PYZus{}path} \PY{o}{=} \PY{n}{pd}\PY{o}{.}\PY{n}{concat}\PY{p}{(}\PY{p}{[}\PY{n}{first\PYZus{}row}\PY{p}{,} \PY{n}{firm\PYZus{}price\PYZus{}path}\PY{p}{]}\PY{p}{)}
+    \PY{n}{firm\PYZus{}price\PYZus{}path} \PY{o}{=} \PY{n}{firm\PYZus{}price\PYZus{}path}\PY{o}{.}\PY{n}{reset\PYZus{}index}\PY{p}{(}\PY{n}{drop}\PY{o}{=}\PY{k+kc}{True}\PY{p}{)}
+
+    \PY{k}{return} \PY{p}{[}\PY{n}{share\PYZus{}price\PYZus{}path}\PY{p}{,}\PY{n}{firm\PYZus{}price\PYZus{}path}\PY{p}{]}  
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{20}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n}{share\PYZus{}prices}\PY{p}{,} \PY{n}{firm\PYZus{}prices} \PY{o}{=} \PY{n}{generate\PYZus{}share\PYZus{}and\PYZus{}firm\PYZus{}price}\PY{p}{(}\PY{n}{S0}\PY{p}{,} \PY{n}{v\PYZus{}0}\PY{p}{,} \PY{n}{r\PYZus{}sim\PYZus{}annualized}\PY{p}{,} \PY{n}{sigma\PYZus{}const}\PY{p}{,} \PY{n}{gamma}\PY{p}{,} \PY{n}{corr}\PY{p}{,} \PY{n}{T}\PY{p}{,} \PY{n}{sample\PYZus{}size}\PY{p}{,} \PY{n}{timesteps} \PY{o}{=} \PY{l+m+mi}{12}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+We also plot the first 1000 stock price and firm value paths simulated:
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{23}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n}{share\PYZus{}prices}\PY{o}{.}\PY{n}{iloc}\PY{p}{[}\PY{p}{:}\PY{p}{,}\PY{l+m+mi}{0}\PY{p}{:}\PY{l+m+mi}{1000}\PY{p}{]}\PY{o}{.}\PY{n}{plot}\PY{p}{(}\PY{n}{title}\PY{o}{=}\PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{Share price over 12 months}\PY{l+s+s1}{\PYZsq{}}\PY{p}{,} \PY{n}{legend}\PY{o}{=}\PY{k+kc}{False}\PY{p}{)}\PY{p}{;}
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{center}
+    \adjustimage{max size={0.9\linewidth}{0.9\paperheight}}{images/output_43_0.png}
+    \end{center}
+    { \hspace*{\fill} \\}
+    
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{24}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n}{firm\PYZus{}prices}\PY{o}{.}\PY{n}{iloc}\PY{p}{[}\PY{p}{:}\PY{p}{,}\PY{l+m+mi}{0}\PY{p}{:}\PY{l+m+mi}{1000}\PY{p}{]}\PY{o}{.}\PY{n}{plot}\PY{p}{(}\PY{n}{title}\PY{o}{=}\PY{l+s+s1}{\PYZsq{}}\PY{l+s+s1}{Firm price over 12 months}\PY{l+s+s1}{\PYZsq{}}\PY{p}{,} \PY{n}{legend}\PY{o}{=}\PY{k+kc}{False}\PY{p}{)}\PY{p}{;}
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{center}
+    \adjustimage{max size={0.9\linewidth}{0.9\paperheight}}{images/output_44_0.png}
+    \end{center}
+    { \hspace*{\fill} \\}
 
 
 \section{Discount Factor and Value of the Up-and-Out Call Option
 }
-Since this is a barrier option, it is necessary to use the 'mask' function to zero the payoffs that would exceed the barrier. This is done in the payoff function.
-\begin{lstlisting}
-# define payoff for up-and-out call option
 
-def payoff(S_t, K, L):
-    stopped_S = S_t.mask(S_t > L, 0)
-    return np.maximum(stopped_S - K, 0).to_numpy()
+In this section we use the capitalisation factor calculated in the section aboove to  calculate the one-year discount factor which applies for each simulation, and use this to find first the value of the option for the jointly simulated stock and firm paths with no default risk, and then the value of the option with counterparty default risk. \\
 
-# Estimate the default-free value of the option:
+We first calculated the one year discount factor, by inverting the capitalisation factor. The capitalisation factor is calculated by taking the cumulative product of the interest rate between each timestep.
 
-option_estimate = []
-option_std = []
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{25}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n}{one\PYZus{}year\PYZus{}disc\PYZus{}fac} \PY{o}{=} \PY{l+m+mi}{1}\PY{o}{/}\PY{n}{np}\PY{o}{.}\PY{n}{cumprod}\PY{p}{(}\PY{l+m+mi}{1}\PY{o}{+}\PY{n}{r\PYZus{}sim}\PY{p}{,}\PY{l+m+mi}{1}\PY{p}{)}\PY{p}{[}\PY{p}{:}\PY{p}{,}\PY{o}{\PYZhy{}}\PY{l+m+mi}{1}\PY{p}{]}
+\PY{n}{one\PYZus{}year\PYZus{}disc\PYZus{}fac}
+\end{Verbatim}
+\end{tcolorbox}
 
-for month, path in share_prices.items():
-    payoffs = payoff(path, K, L)
-    option_price = np.exp(-risk_free*T)*payoffs
-    option_estimate.append(option_price.mean())
-    option_std.append(option_price.std()/np.sqrt(sample_size))
-\end{lstlisting}
-This calculates the mean value for the call option mean risk-free price as 1.200.
+            \begin{tcolorbox}[breakable, size=fbox, boxrule=.5pt, pad at break*=1mm, opacityfill=0]
+\prompt{Out}{outcolor}{25}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+array([0.93045792, 0.91464088, 0.92665426, {\ldots}, 0.93658426, 0.92383486,
+       0.92979433])
+\end{Verbatim}
+\end{tcolorbox}
+
+Next, we calculate the Default-Free Option Value. One difference is that we multiple the payoff by the one year discount factor, instead of multiplying with  $e^{rT}$
+        
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{26}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{c+c1}{\PYZsh{} define payoff for up\PYZhy{}and\PYZhy{}out call option}
+\PY{k}{def} \PY{n+nf}{payoff}\PY{p}{(}\PY{n}{S\PYZus{}t}\PY{p}{,} \PY{n}{K}\PY{p}{,} \PY{n}{L}\PY{p}{)}\PY{p}{:}
+    \PY{n}{stopped\PYZus{}S} \PY{o}{=} \PY{n}{S\PYZus{}t}\PY{o}{.}\PY{n}{iloc}\PY{p}{[}\PY{o}{\PYZhy{}}\PY{l+m+mi}{1}\PY{p}{]}\PY{o}{.}\PY{n}{where}\PY{p}{(}\PY{p}{(}\PY{n}{S\PYZus{}t} \PY{o}{\PYZlt{}} \PY{n}{L}\PY{p}{)}\PY{o}{.}\PY{n}{all}\PY{p}{(}\PY{p}{)}\PY{p}{,} \PY{l+m+mi}{0}\PY{p}{)}
+    \PY{k}{return} \PY{n}{np}\PY{o}{.}\PY{n}{maximum}\PY{p}{(}\PY{n}{stopped\PYZus{}S} \PY{o}{\PYZhy{}} \PY{n}{K}\PY{p}{,} \PY{l+m+mi}{0}\PY{p}{)}\PY{o}{.}\PY{n}{to\PYZus{}numpy}\PY{p}{(}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{27}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{c+c1}{\PYZsh{} Estimate the default\PYZhy{}free value of the option:}
+\PY{n}{option\PYZus{}estimate} \PY{o}{=} \PY{p}{[}\PY{p}{]}
+\PY{n}{option\PYZus{}std} \PY{o}{=} \PY{p}{[}\PY{p}{]}
+
+
+\PY{n}{payoffs} \PY{o}{=} \PY{n}{payoff}\PY{p}{(}\PY{n}{share\PYZus{}prices}\PY{p}{,} \PY{n}{K}\PY{p}{,} \PY{n}{L}\PY{p}{)}
+\PY{n}{option\PYZus{}price} \PY{o}{=} \PY{n}{one\PYZus{}year\PYZus{}disc\PYZus{}fac}\PY{o}{*}\PY{n}{payoffs}
+\PY{n}{option\PYZus{}estimate} \PY{o}{=} \PY{n}{option\PYZus{}price}\PY{o}{.}\PY{n}{mean}\PY{p}{(}\PY{p}{)}
+\PY{n}{option\PYZus{}std} \PY{o}{=} \PY{n}{option\PYZus{}price}\PY{o}{.}\PY{n}{std}\PY{p}{(}\PY{p}{)}\PY{o}{/}\PY{n}{np}\PY{o}{.}\PY{n}{sqrt}\PY{p}{(}\PY{n}{sample\PYZus{}size}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{28}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n+nb}{print}\PY{p}{(}\PY{l+s+s2}{\PYZdq{}}\PY{l+s+s2}{Default\PYZhy{}free option price }\PY{l+s+si}{\PYZob{}:.3f\PYZcb{}}\PY{l+s+s2}{\PYZdq{}}\PY{o}{.}\PY{n}{format}\PY{p}{(}\PY{n}{option\PYZus{}estimate}\PY{p}{)}\PY{p}{)}
+\PY{n+nb}{print}\PY{p}{(}\PY{l+s+s2}{\PYZdq{}}\PY{l+s+s2}{Default\PYZhy{}free option price standard deviation }\PY{l+s+si}{\PYZob{}:.3f\PYZcb{}}\PY{l+s+s2}{\PYZdq{}}\PY{o}{.}\PY{n}{format}\PY{p}{(}\PY{n}{option\PYZus{}std}\PY{p}{)}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{Verbatim}[commandchars=\\\{\}]
+Default-free option price 8.296
+Default-free option price standard deviation 0.008
+    \end{Verbatim}
+    
+Next, we incorporate the CVA Adjustment similar to the first submission.    
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{29}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n}{payoffs} \PY{o}{=} \PY{n}{payoff}\PY{p}{(}\PY{n}{share\PYZus{}prices}\PY{p}{,} \PY{n}{K}\PY{p}{,} \PY{n}{L}\PY{p}{)}
+\PY{n}{term\PYZus{}firm\PYZus{}vals} \PY{o}{=} \PY{n}{firm\PYZus{}prices}\PY{o}{.}\PY{n}{iloc}\PY{p}{[}\PY{o}{\PYZhy{}}\PY{l+m+mi}{1}\PY{p}{]}\PY{o}{.}\PY{n}{to\PYZus{}numpy}\PY{p}{(}\PY{p}{)}
+\PY{n}{amount\PYZus{}lost} \PY{o}{=} \PY{n}{one\PYZus{}year\PYZus{}disc\PYZus{}fac}\PY{o}{*}\PY{p}{(}\PY{l+m+mi}{1}\PY{o}{\PYZhy{}}\PY{n}{recovery\PYZus{}rate}\PY{p}{)}\PY{o}{*}\PY{p}{(}\PY{n}{term\PYZus{}firm\PYZus{}vals} \PY{o}{\PYZlt{}} \PY{n}{debt}\PY{p}{)}\PY{o}{*}\PY{n}{payoffs}
+\PY{n}{cva\PYZus{}estimate} \PY{o}{=} \PY{n}{amount\PYZus{}lost}\PY{o}{.}\PY{n}{mean}\PY{p}{(}\PY{p}{)}
+\PY{n}{cva\PYZus{}std} \PY{o}{=} \PY{n}{amount\PYZus{}lost}\PY{o}{.}\PY{n}{std}\PY{p}{(}\PY{p}{)}\PY{o}{/}\PY{n}{np}\PY{o}{.}\PY{n}{sqrt}\PY{p}{(}\PY{n}{sample\PYZus{}size}\PY{p}{)}
+
+\PY{n}{option\PYZus{}cva\PYZus{}price} \PY{o}{=} \PY{n}{option\PYZus{}price} \PY{o}{\PYZhy{}} \PY{n}{amount\PYZus{}lost}
+\PY{n}{option\PYZus{}cva\PYZus{}adjusted\PYZus{}prices} \PY{o}{=} \PY{n}{option\PYZus{}cva\PYZus{}price}\PY{o}{.}\PY{n}{mean}\PY{p}{(}\PY{p}{)}
+\PY{n}{option\PYZus{}cva\PYZus{}adjusted\PYZus{}std} \PY{o}{=} \PY{n}{option\PYZus{}cva\PYZus{}price}\PY{o}{.}\PY{n}{std}\PY{p}{(}\PY{p}{)}\PY{o}{/}\PY{n}{np}\PY{o}{.}\PY{n}{sqrt}\PY{p}{(}\PY{n}{sample\PYZus{}size}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{tcolorbox}[breakable, size=fbox, boxrule=1pt, pad at break*=1mm,colback=cellbackground, colframe=cellborder]
+\prompt{In}{incolor}{30}{\boxspacing}
+\begin{Verbatim}[commandchars=\\\{\}]
+\PY{n+nb}{print}\PY{p}{(}\PY{l+s+s2}{\PYZdq{}}\PY{l+s+s2}{Credit value adjustment }\PY{l+s+si}{\PYZob{}:.3f\PYZcb{}}\PY{l+s+s2}{\PYZdq{}}\PY{o}{.}\PY{n}{format}\PY{p}{(}\PY{n}{cva\PYZus{}estimate}\PY{p}{)}\PY{p}{)}
+\PY{n+nb}{print}\PY{p}{(}\PY{l+s+s2}{\PYZdq{}}\PY{l+s+s2}{Credit value adjustment standard deviation }\PY{l+s+si}{\PYZob{}:.3f\PYZcb{}}\PY{l+s+s2}{\PYZdq{}}\PY{o}{.}\PY{n}{format}\PY{p}{(}\PY{n}{cva\PYZus{}std}\PY{p}{)}\PY{p}{)}
+
+\PY{n+nb}{print}\PY{p}{(}\PY{l+s+s2}{\PYZdq{}}\PY{l+s+s2}{CVA\PYZhy{}adjusted option price }\PY{l+s+si}{\PYZob{}:.3f\PYZcb{}}\PY{l+s+s2}{\PYZdq{}}\PY{o}{.}\PY{n}{format}\PY{p}{(}\PY{n}{option\PYZus{}cva\PYZus{}adjusted\PYZus{}prices}\PY{p}{)}\PY{p}{)}
+\PY{n+nb}{print}\PY{p}{(}\PY{l+s+s2}{\PYZdq{}}\PY{l+s+s2}{CVA\PYZhy{}adjusted option price standard deviation }\PY{l+s+si}{\PYZob{}:.3f\PYZcb{}}\PY{l+s+s2}{\PYZdq{}}\PY{o}{.}\PY{n}{format}\PY{p}{(}\PY{n}{option\PYZus{}cva\PYZus{}adjusted\PYZus{}std}\PY{p}{)}\PY{p}{)}
+\end{Verbatim}
+\end{tcolorbox}
+
+    \begin{Verbatim}[commandchars=\\\{\}]
+Credit value adjustment 0.018
+Credit value adjustment standard deviation 0.000
+CVA-adjusted option price 8.278
+CVA-adjusted option price standard deviation 0.008
+    \end{Verbatim}
+
+
+
 
 \section{Conclusion}
 In this paper, we simulated correlated firm and share price paths. From this, we priced an up-and-out call option at 8.299 with a default-free risk profile, and at 8.281 for the CVA-adjusted price. Considering that the same parameters are used as the first submission, where the Black-Scholes-Merton model was used to arrive at a price of 5.697, we observe that both the default risk, the variable interest rate and local volatility have all added a premium to the option price. These conditions, which are more aligned to observed market conditions, gave a total increase of 45\% over the previously calculated price, with the default risk accounting for only 0.2\% of the difference. These results underline the importance of choosing the correct model and performing accurate calibration in order to calculate instrument prices.
