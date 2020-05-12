@@ -960,9 +960,9 @@ Sample size: 50000, CVA-adjusted option value: 5.697
     \end{center}
     { \hspace*{\fill} \\}
 \section{Conclusion}
-We are well aware that Black-Scholes formula was derived under assumptions which might not hold in a real market, as an example, if the share price deviates from the geometric Brownian motion, then our estimates can be wrong by a big margin.  However with the assumptions of Black-Scholes-Merton model we were able to price a European Up-and-out Call Option.  We were able to use knowledge from module 2 and 3 to generate Python code for monthly simulations for the lifetime of the option.  Also, our Monte Carlo estimates are highly dependant on parameters such as firm value if firm value is well above debt value and the volatility of the firm is low, the chance of default is really low.
+In this paper, we simulated correlated firm and share price paths. From this, we priced an up-and-out call option at 8.299 with a default-free risk profile, and at 8.281 for the CVA-adjusted price. Considering that the same parameters are used as the first submission, where the Black-Scholes-Merton model was used to arrive at a price of 5.697, we observe that both the default risk, the variable interest rate and local volatility have all added a premium to the option price. These conditions, which are more aligned to observed market conditions, gave a total increase of 45\% over the previously calculated price, with the default risk accounting for only 0.2\% of the difference. These results underline the importance of choosing the correct model and performing accurate calibration in order to calculate instrument prices.
 
-
+We are well aware that Black-Scholes formula was derived under assumptions which might not hold in a real market, as an example, if the share price deviates from the geometric Brownian motion, then our estimates can be wrong by a big margin. Also, our Monte Carlo estimates are highly dependant on parameters such as firm value; if firm value is well above debt value and the volatility of the firm is low, the chance of default is really low.
 \newpage
 \section*{} \label{bibsection}
 
